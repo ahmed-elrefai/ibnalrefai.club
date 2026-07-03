@@ -17,6 +17,7 @@ COPY app.js .
 COPY style.css .
 COPY me.webp .
 COPY refai_stats_card.webp .
+COPY favicon.ico .
 
 # Expose port 8000 for FastAPI / Uvicorn
 EXPOSE 8000

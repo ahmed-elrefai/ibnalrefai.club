@@ -174,6 +174,7 @@ function updateQuoteSelectOptions() {
 
     if (testType === 'code') {
         const options = [
+            { value: 'linear_search', textAr: 'البحث الخطي // Linear Search', textEn: 'Linear Search (Python)' },
             { value: 'binary_search', textAr: 'البحث الثنائي // Binary Search', textEn: 'Binary Search (Python)' },
             { value: 'bubble_sort', textAr: 'فرز الفقاعات // Bubble Sort', textEn: 'Bubble Sort (Python)' },
             { value: 'insertion_sort', textAr: 'فرز الإدخال // Insertion Sort', textEn: 'Insertion Sort (Python)' },
@@ -526,6 +527,9 @@ const quotesBank = {
             "البرق يضرب دون سابق إنذار. محرك FastAPI يخدم آلاف الطلبات في الثواني المعدودة. ركز جيدا واضرب لوحة المفاتيح بقوة.",
             "أتمتة المهام تجعل العمليات المعقدة تتم بضغطة زر. ميكنة التقارير أوتو بي دي إف تخلصنا من العمل اليدوي المزعج."
         ],
+        linear_search: [
+            "def linear_search(arr, target):\n    for i in range(len(arr)):\n        if arr[i] == target:\n            return i\n    return -1"
+        ],
         binary_search: [
             "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1"
         ],
@@ -560,6 +564,9 @@ const quotesBank = {
             "Data flows at lightning speed through Redis channels while Cloud Spanner coordinates graph retrieval with high efficiency.",
             "FastAPI serves thousands of concurrent requests in milliseconds. Focus your mind, strike the keys, conquer complexity.",
             "Pipeline automation turns tedious labor into millisecond executions. Let automation handle the repetition so you can build."
+        ],
+        linear_search: [
+            "def linear_search(arr, target):\n    for i in range(len(arr)):\n        if arr[i] == target:\n            return i\n    return -1"
         ],
         binary_search: [
             "def binary_search(arr, target):\n    left, right = 0, len(arr) - 1\n    while left <= right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid + 1\n        else:\n            right = mid - 1\n    return -1"
@@ -634,6 +641,7 @@ const hudStreakBar = document.querySelector('#hud-streak .bar-fill');
 const rankOverlay = document.getElementById('rank-overlay');
 const btnRankClose = document.getElementById('btn-rank-close');
 const rankTitle = document.getElementById('rank-title');
+const rankAlgoBadge = document.getElementById('rank-algo-badge');
 const rankWpm = document.getElementById('rank-wpm');
 const rankAcc = document.getElementById('rank-acc');
 const rankTime = document.getElementById('rank-time');
@@ -1074,6 +1082,10 @@ function endTypingTest(finalWpm, finalAccuracy) {
 
     // Populate overlay metrics
     rankTitle.innerText = title;
+    if (rankAlgoBadge) {
+        const selectedOptionText = quoteSelect.options[quoteSelect.selectedIndex] ? quoteSelect.options[quoteSelect.selectedIndex].text : '';
+        rankAlgoBadge.innerText = selectedOptionText;
+    }
     rankWpm.innerText = `${cleanWpm} WPM`;
     rankAcc.innerText = `${cleanAccuracy}%`;
     if (rankTime) {

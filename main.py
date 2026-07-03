@@ -29,3 +29,7 @@ async def serve_me_webp():
 @app.get("/refai_stats_card.webp")
 async def serve_refai_stats_card_webp():
     return FileResponse("refai_stats_card.webp", media_type="image/webp")
+
+@app.get("/favicon.ico")
+async def serve_favicon():
+    return FileResponse("favicon.ico", media_type="image/x-icon")

@@ -15,6 +15,9 @@ COPY main.py .
 COPY index.html .
 COPY app.js .
 COPY style.css .
+COPY visualizer.html .
+COPY visualizer.js .
+COPY visualizer.css .
 COPY me.webp .
 COPY refai_stats_card.webp .
 COPY favicon.ico .

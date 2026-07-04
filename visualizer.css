@@ -1,0 +1,677 @@
+/* ----------------------------------------------------
+   CODE VISUALIZER SPECIFIC STYLING
+   ---------------------------------------------------- */
+
+.visualizer-page {
+    background-color: var(--bg-paper);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto; /* Page remains scrollable so the footer can be scrolled to if necessary */
+}
+
+.visualizer-container {
+    display: flex;
+    flex-direction: row;
+    gap: 20px;
+    height: 100vh; /* Fill the whole screen height now that header is gone */
+    min-height: 100vh;
+    padding: 20px;
+    box-sizing: border-box;
+    overflow: hidden; /* Prevent visualizer container itself from scrolling */
+    flex-shrink: 0;
+}
+
+/* RTL Layout swap */
+html[dir="rtl"] .visualizer-container {
+    flex-direction: row-reverse;
+}
+
+/* Left Column: Editor on top, Variables Stack at bottom */
+.visualizer-left-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 420px; /* Width for editor and variable stack column */
+    flex-shrink: 0;
+    height: 100%;
+}
+
+.visualizer-left-column .panel-editor-area {
+    flex-grow: 7; /* Taller editor */
+    height: 0;
+    min-height: 0;
+}
+
+.visualizer-left-column .panel-variables-stack {
+    flex-grow: 3; /* Stack takes rest */
+    height: 0;
+    min-height: 0;
+}
+
+/* Right Column: Visualizer panel takes remaining screen width and 100% height */
+.visualizer-right-column-container {
+    flex-grow: 1;
+    height: 100%;
+    min-width: 0;
+}
+
+.visualizer-right-column-container .panel-visual-arena {
+    height: 100%;
+    width: 100%;
+}
+
+/* Back to Home Button floating on the top-right */
+.btn-back-home {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background-color: var(--color-ink);
+    color: white;
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 6px 12px;
+    text-decoration: none;
+    border: 2px solid white;
+    border-radius: 4px;
+    box-shadow: 3px 3px 0px var(--color-crimson);
+    transition: transform 0.2s, box-shadow 0.2s;
+    z-index: 20;
+}
+
+html[dir="rtl"] .btn-back-home {
+    right: auto;
+    left: 12px;
+}
+
+.btn-back-home:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0px var(--color-crimson);
+}
+
+/* Floating Control Pill centered at the bottom of the visualizer arena */
+.visualizer-actions-floating {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--color-ink);
+    border: var(--border-manga);
+    padding: 8px 18px;
+    border-radius: 50px; /* Pill shape */
+    box-shadow: 4px 4px 0px var(--color-crimson);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.visualizer-actions-floating .execution-controls {
+    display: flex;
+    gap: 12px;
+}
+
+.visualizer-actions-floating .btn-secondary {
+    background-color: white;
+    color: var(--color-ink);
+    border: 2px solid var(--color-ink);
+    padding: 8px 12px;
+    font-size: 15px;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: none;
+    transition: transform 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.visualizer-actions-floating .btn-secondary:hover:not(:disabled) {
+    transform: scale(1.1);
+    background-color: var(--color-light-gray);
+}
+
+/* 3. Editor Panel */
+.panel-editor-area {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.panel-editor-area .panel-inner {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.lang-selector {
+    display: flex;
+    border: var(--border-manga-thin);
+    border-radius: 6px;
+    overflow: hidden;
+    box-shadow: 3px 3px 0px var(--color-ink);
+}
+
+.btn-lang-tab {
+    background: white;
+    border: none;
+    padding: 8px 16px;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 13px;
+    color: var(--color-ink);
+    cursor: pointer;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.btn-lang-tab.active {
+    background: var(--color-ink);
+    color: white;
+}
+
+.preset-selector-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preset-selector-wrapper label {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.preset-select {
+    border: var(--border-manga-thin);
+    padding: 8px 12px;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 13px;
+    background: white;
+    box-shadow: 3px 3px 0px var(--color-ink);
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+}
+
+.editor-wrapper {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: row; /* Force LTR row order */
+    direction: ltr !important;
+    text-align: left !important;
+    border: var(--border-manga);
+    background-color: #1e1e1e;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 4px 4px 0px var(--color-ink);
+    margin-bottom: 12px;
+    height: 0;
+    min-height: 0;
+}
+
+.line-numbers {
+    padding: 12px 8px;
+    background-color: #151515;
+    color: #666;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    text-align: right;
+    user-select: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-right: 1px solid #333;
+    border-left: none; /* Align to left side in LTR */
+    min-width: 36px;
+    direction: ltr !important;
+}
+
+.line-numbers span.active-line {
+    color: var(--color-crimson);
+    font-weight: bold;
+}
+
+#code-input {
+    flex-grow: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    padding: 12px;
+    color: #f8f8f2;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    line-height: 20px;
+    resize: none;
+    white-space: pre;
+    overflow-x: auto;
+    overflow-y: auto;
+    tab-size: 4;
+    direction: ltr !important;
+    text-align: left !important;
+}
+
+/* Visualizer Controls */
+.visualizer-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-top: 15px;
+    margin-bottom: 0px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.visualizer-actions .btn-be-cool {
+    padding: 12px 24px;
+    font-size: 15px;
+    border-radius: 6px;
+}
+
+.execution-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.execution-controls .btn-secondary {
+    padding: 10px 14px;
+    font-size: 16px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 3px 3px 0px var(--color-ink);
+}
+
+.execution-controls .btn-secondary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none !important;
+    box-shadow: 1px 1px 0px var(--color-ink) !important;
+}
+
+.sim-status-box {
+    background-color: #fffbeb;
+    border: var(--border-manga-thin);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #854d0e;
+    box-shadow: 2px 2px 0px var(--color-ink);
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+/* 4. Battlefield Layout */
+/* Variables Stack Column */
+.panel-variables-stack {
+    width: 100%;
+    height: 100%;
+}
+
+.panel-variables-stack .panel-inner {
+    padding: 16px;
+    background: white;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.screentone-bg {
+    position: absolute;
+    inset: 0;
+    background-image: radial-gradient(rgba(0, 0, 0, 0.03) 1.2px, transparent 0);
+    background-size: 8px 8px;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.variables-list {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column; /* Vertical list for stack variables */
+    gap: 12px;
+    overflow-y: auto; /* Vertically scrollable */
+    flex-grow: 1;
+    padding-bottom: 5px;
+    z-index: 2;
+}
+
+.empty-stack-placeholder, .empty-arena-placeholder {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--color-gray);
+    width: 100%;
+    text-align: center;
+    border: 2px dashed var(--color-light-gray);
+    padding: 16px;
+    border-radius: 6px;
+}
+
+/* Variable Card */
+.variable-card {
+    background: white;
+    border: var(--border-manga-thin);
+    padding: 8px 16px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 3px 3px 0px var(--color-ink);
+    min-width: 120px;
+    height: 48px;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.variable-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 3px 3px 0px var(--color-crimson);
+}
+
+.var-name-badge {
+    background-color: var(--color-ink);
+    color: white;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transform: skewX(-6deg);
+}
+
+.var-val-badge {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    font-weight: bold;
+    color: var(--color-crimson);
+}
+
+/* Visualization Panel */
+
+.panel-visual-arena .panel-inner {
+    padding: 16px;
+    background: white;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.visual-arena-content {
+    margin-top: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center; /* Center array container vertically in the battlefield */
+    align-items: center; /* Center array container horizontally */
+    gap: 40px; /* Space between multiple arrays or components */
+    flex-grow: 1;
+    z-index: 2;
+    overflow-y: auto;
+    padding-bottom: 20px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+/* 5. Array Visualization Layout */
+.array-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px; /* space between pointers row and array row */
+    position: relative;
+    padding: 80px 20px 20px 20px; /* Increased top padding to prevent pointer cropping */
+    border: 2px dashed rgba(17, 17, 17, 0.1);
+    border-radius: 8px;
+    background: rgba(244, 243, 240, 0.4);
+    min-width: 320px;
+    width: 90%; /* Let it occupy most of the battlefield width */
+    max-width: 850px;
+    box-sizing: border-box;
+    margin: 0 auto; /* Ensure horizontal centering */
+}
+
+/* Title of the Array */
+.array-title {
+    position: absolute;
+    top: -12px;
+    left: 15px;
+    background-color: var(--color-crimson);
+    color: white;
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    box-shadow: 2px 2px 0px var(--color-ink);
+    transform: skewX(-6deg);
+}
+
+html[dir="rtl"] .array-title {
+    left: auto;
+    right: 15px;
+}
+
+/* Array Slots Row */
+.array-row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow: hidden; /* Prevent scrolling in the visualizer area */
+    justify-content: center; /* Center boxes horizontally */
+    padding: 8px 4px;
+}
+
+/* Individual Slot */
+.array-slot {
+    flex: 0 0 var(--slot-size, 88px); /* Dynamic slot size */
+    width: var(--slot-size, 88px);
+    height: var(--slot-size, 88px);
+    background-color: white;
+    border: var(--border-manga-thin);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    box-shadow: 3px 3px 0px var(--color-ink);
+    transition: transform 0.2s, background-color 0.2s, width 0.2s, height 0.2s;
+}
+
+.array-slot.active-operation {
+    background-color: #fee2e2;
+    border-color: var(--color-crimson);
+    transform: scale(1.05);
+}
+
+.slot-index {
+    position: absolute;
+    bottom: -22px;
+    font-size: calc(var(--slot-size, 88px) * 0.14);
+    font-weight: bold;
+    color: var(--color-gray);
+    font-family: 'Courier New', Courier, monospace;
+}
+
+.slot-value {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: calc(var(--slot-size, 88px) * 0.28);
+    font-weight: 900;
+    color: var(--color-ink);
+}
+
+/* Implicit fading sizes (fading slots) */
+.array-slot.slot-fading-1 {
+    opacity: 0.7;
+    background: linear-gradient(135deg, white 70%, rgba(244, 243, 240, 0.5) 100%);
+    border-style: dashed;
+}
+
+.array-slot.slot-fading-2 {
+    opacity: 0.45;
+    background: linear-gradient(135deg, white 40%, rgba(244, 243, 240, 0.7) 100%);
+    border-style: dashed;
+    box-shadow: 1px 1px 0px var(--color-ink);
+}
+
+.array-slot.slot-fading-3 {
+    opacity: 0.25;
+    background: transparent;
+    border: 2px dashed var(--color-gray);
+    box-shadow: none;
+}
+
+/* Unsupported Code Placeholder */
+.unsupported-visualization-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 30px 20px;
+    border: 3px dashed var(--color-crimson);
+    background-color: #fffaf0;
+    border-radius: 8px;
+    color: var(--color-ink);
+    text-align: center;
+    max-width: 500px;
+    margin: auto;
+    box-shadow: 6px 6px 0px var(--color-ink);
+}
+
+.unsupported-title {
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 18px;
+    color: var(--color-crimson);
+    text-transform: uppercase;
+    transform: skewX(-6deg);
+    border: 2px solid var(--color-ink);
+    background-color: white;
+    padding: 6px 16px;
+    box-shadow: 3px 3px 0px var(--color-ink);
+}
+
+.unsupported-desc {
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+/* Pointer Container & Slot-aligned Pointers */
+.slot-pointers {
+    position: absolute;
+    bottom: 100%; /* Align with the top of the slot */
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column; /* Stack pointers vertically if multiple */
+    align-items: center;
+    pointer-events: none;
+    margin-bottom: 6px;
+    z-index: 10;
+}
+
+.pointer-marker {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    margin-top: -4px;
+}
+
+.pointer-label {
+    background-color: var(--color-ink);
+    color: white;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    box-shadow: 2px 2px 0px var(--color-crimson);
+    white-space: nowrap;
+    margin-bottom: 4px;
+}
+
+.pointer-arrow-svg {
+    filter: drop-shadow(2px 2px 0px rgba(0, 0, 0, 0.15));
+    animation: pointer-bounce 0.8s infinite alternate;
+    margin-top: 4px;
+}
+
+.pointer-arrow-svg .arrow-shaft,
+.pointer-arrow-svg .arrow-head {
+    fill: var(--color-crimson);
+    stroke: var(--color-ink);
+    stroke-width: 2.5px;
+}
+
+@keyframes pointer-bounce {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(3px); }
+}
+
+/* Highlight running line in Code */
+.code-line-highlight {
+    background-color: rgba(230, 30, 43, 0.15);
+    border-left: 3px solid var(--color-crimson);
+    display: block;
+    width: 100%;
+}
+
+/* Responsive adjustments for mobile viewports */
+@media (max-width: 900px) {
+    .visualizer-page {
+        height: auto !important;
+        overflow: auto !important;
+    }
+    .visualizer-container {
+        flex-direction: column !important;
+        height: auto !important;
+        overflow: auto !important;
+        padding: 20px 4% !important;
+    }
+    .visualizer-left-column {
+        width: 100% !important;
+        height: auto !important;
+    }
+    .visualizer-left-column .panel-editor-area {
+        height: 350px !important;
+    }
+    .visualizer-left-column .panel-variables-stack {
+        height: 200px !important;
+    }
+    .visualizer-right-column-container {
+        width: 100% !important;
+        height: 450px !important;
+    }
+    .btn-back-home {
+        position: static !important;
+        display: inline-block;
+        margin-bottom: 10px;
+        width: fit-content;
+    }
+    .visualizer-actions-floating {
+        position: static !important;
+        transform: none !important;
+        margin: 15px auto 0 auto;
+        border-radius: 8px;
+    }
+}

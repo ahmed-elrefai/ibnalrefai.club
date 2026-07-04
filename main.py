@@ -33,3 +33,16 @@ async def serve_refai_stats_card_webp():
 @app.get("/favicon.ico")
 async def serve_favicon():
     return FileResponse("favicon.ico", media_type="image/x-icon")
+
+@app.get("/visualizer")
+async def serve_visualizer():
+    return FileResponse("visualizer.html")
+
+@app.get("/visualizer.js")
+async def serve_visualizer_js():
+    return FileResponse("visualizer.js")
+
+@app.get("/visualizer.css")
+async def serve_visualizer_css():
+    return FileResponse("visualizer.css")
+

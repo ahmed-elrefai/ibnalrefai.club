@@ -15,7 +15,12 @@ let currentPreset = 'linear'; // 'linear', 'binary', 'bubble', 'implicit'
 let currentStep = 0;
 let isPlaying = false;
 let simulationInterval = null;
-let traces = null;
+let traces = {
+    linear: [],
+    binary: [],
+    bubble: [],
+    implicit: []
+};
 
 // ----------------------------------------------------
 // TRANSLATION DICTIONARY
@@ -41,7 +46,11 @@ const translations = {
         'unsupported-title': 'تقنية غير مدعومة // UNSUPPORTED CODE',
         'unsupported-desc': 'هذا المحاكي مصمم حالياً لتجسيد خوارزميات البحث والفرز الشهيرة. يرجى استخدام أحد الأمثلة الجاهزة لرؤية نصل المحاكاة!',
         'sound-on-text': 'صوت: تفعيل',
-        'sound-off-text': 'صوت: كتم'
+        'sound-off-text': 'صوت: كتم',
+        'param-arr-label': 'المصفوفة // Array',
+        'param-target-label': 'الهدف // Target',
+        'param-arr-invalid': 'يرجى إدخال مصفوفة صالحة (أرقام مفصولة بفواصل)',
+        'param-target-invalid': 'يرجى إدخال قيمة هدف صالحة'
     },
     en: {
         'vis-title': 'Code Visualizer',
@@ -63,11 +72,15 @@ const translations = {
         'unsupported-title': 'UNSUPPORTED CODE',
         'unsupported-desc': 'This visualizer is optimized to trace key search and sorting algorithms. Please load one of the presets to see the visualization!',
         'sound-on-text': 'SOUND: ON',
-        'sound-off-text': 'MUTED'
+        'sound-off-text': 'MUTED',
+        'param-arr-label': 'Array',
+        'param-target-label': 'Target',
+        'param-arr-invalid': 'Please enter a valid array (comma-separated numbers)',
+        'param-target-invalid': 'Please enter a valid target value'
     }
 };
 
-// Preset Codes
+// Preset Codes (function-only, no variable assignments)
 const presetCodes = {
     python: {
         linear: `def linear_search(arr, target):
@@ -94,11 +107,12 @@ const presetCodes = {
             if arr[j] > arr[j + 1]:
                 arr[j], arr[j + 1] = arr[j + 1], arr[j]
     return arr`,
-        implicit: `# مصفوفة غير محددة الحجم // Implicit Size Array
+        implicit: `# مصفوفة غير محددة الحجم
+# Implicit Size Array
 arr = [10, 20, 30, 40, 50, ...]
-val0 = arr[0] # الوصول للفهرس 0
-val3 = arr[3] # الوصول للفهرس 3
-val5 = arr[5] # وصول الفهرس 5 (ديناميكي)`
+val0 = arr[0]
+val3 = arr[3]
+val5 = arr[5]`
     },
     js: {
         linear: `function linearSearch(arr, target) {
@@ -137,12 +151,21 @@ val5 = arr[5] # وصول الفهرس 5 (ديناميكي)`
     }
     return arr;
 }`,
-        implicit: `// مصفوفة غير محددة الحجم // Implicit Size Array
+        implicit: `// مصفوفة غير محددة الحجم
+// Implicit Size Array
 const arr = [10, 20, 30, 40, 50, ...];
-const val0 = arr[0]; // الوصول للفهرس 0
-const val3 = arr[3]; // الوصول للفهرس 3
-const val5 = arr[5]; // وصول الفهرس 5 (ديناميكي)`
+const val0 = arr[0];
+const val3 = arr[3];
+const val5 = arr[5];`
     }
+};
+
+// Preset parameter configuration: default values & which fields to show
+const presetParams = {
+    linear:   { arr: [12, 5, 8, 19, 3, 7, 21], target: 7,  showTarget: true  },
+    binary:   { arr: [2, 5, 8, 12, 16, 23, 38, 56, 72], target: 23, showTarget: true  },
+    bubble:   { arr: [5, 1, 4, 2, 8],           target: null, showTarget: false },
+    implicit: { arr: [10, 20, 30, 40, 50],      target: null, showTarget: false }
 };
 
 // ----------------------------------------------------
@@ -364,536 +387,551 @@ function drawScreenSlash() {
 }
 
 // ----------------------------------------------------
-// TRACE GENERATION (Simulation Database)
+// DYNAMIC TRACE GENERATION (Simulation Sandbox Engine)
 // ----------------------------------------------------
-function getTraceDatabase() {
-    return {
-        linear: [
-            {
-                linePy: 1, lineJs: 1,
-                statusAr: "تم تهيئة البحث الخطي. سنبحث عن الرقم 7 في المصفوفة [12, 5, 8, 19, 3, 7, 21].",
-                statusEn: "Linear search initialized. We will search for target 7 in the array [12, 5, 8, 19, 3, 7, 21].",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: {},
-                activeSlots: [],
-                variables: { target: 7 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "بدء الحلقة التكرارية. فحص العنصر الأول عند الفهرس i = 0.",
-                statusEn: "Starting loop. Checking first element at index i = 0.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 0 },
-                activeSlots: [0],
-                variables: { target: 7, i: 0 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "هل القيمة 12 تساوي 7؟ لا. سنستمر في البحث.",
-                statusEn: "Does 12 equal 7? No. Continuing the search.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 0 },
-                activeSlots: [0],
-                variables: { target: 7, i: 0 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "الانتقال للعنصر التالي عند الفهرس i = 1.",
-                statusEn: "Moving to the next element at index i = 1.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 1 },
-                activeSlots: [1],
-                variables: { target: 7, i: 1 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "هل القيمة 5 تساوي 7؟ لا. سنستمر في البحث.",
-                statusEn: "Does 5 equal 7? No. Continuing the search.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 1 },
-                activeSlots: [1],
-                variables: { target: 7, i: 1 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "الانتقال للعنصر التالي عند الفهرس i = 2.",
-                statusEn: "Moving to the next element at index i = 2.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 2 },
-                activeSlots: [2],
-                variables: { target: 7, i: 2 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "هل القيمة 8 تساوي 7؟ لا. سنستمر في البحث.",
-                statusEn: "Does 8 equal 7? No. Continuing the search.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 2 },
-                activeSlots: [2],
-                variables: { target: 7, i: 2 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "الانتقال للعنصر التالي عند الفهرس i = 3.",
-                statusEn: "Moving to the next element at index i = 3.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 3 },
-                activeSlots: [3],
-                variables: { target: 7, i: 3 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "هل القيمة 19 تساوي 7؟ لا. سنستمر في البحث.",
-                statusEn: "Does 19 equal 7? No. Continuing the search.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 3 },
-                activeSlots: [3],
-                variables: { target: 7, i: 3 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "الانتقال للعنصر التالي عند الفهرس i = 4.",
-                statusEn: "Moving to the next element at index i = 4.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 4 },
-                activeSlots: [4],
-                variables: { target: 7, i: 4 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "هل القيمة 3 تساوي 7؟ لا. سنستمر في البحث.",
-                statusEn: "Does 3 equal 7? No. Continuing the search.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 4 },
-                activeSlots: [4],
-                variables: { target: 7, i: 4 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "الانتقال للعنصر التالي عند الفهرس i = 5.",
-                statusEn: "Moving to the next element at index i = 5.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 5 },
-                activeSlots: [5],
-                variables: { target: 7, i: 5 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "مقارنة العنصر: هل القيمة 7 تساوي 7؟ نعم! لقد وجدنا الهدف.",
-                statusEn: "Comparing element: Does value 7 equal 7? Yes! Target found.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 5 },
-                activeSlots: [5],
-                variables: { target: 7, i: 5 },
+
+// Read array from the dedicated input field
+function parseArrFromField() {
+    const field = document.getElementById('param-arr');
+    if (!field) return { valid: false, arr: [] };
+
+    const raw = field.value.trim();
+    if (!raw) return { valid: false, arr: [] };
+
+    // Remove surrounding brackets if user typed them
+    const cleaned = raw.replace(/^\[/, '').replace(/\]$/, '').replace(/\.{2,}\s*$/, '').trim();
+    if (!cleaned) return { valid: false, arr: [] };
+
+    const parts = cleaned.split(',').map(s => s.trim()).filter(s => s !== '');
+    if (parts.length === 0) return { valid: false, arr: [] };
+
+    const arr = parts.map(s => {
+        const num = Number(s);
+        return isNaN(num) ? s : num;
+    });
+
+    // Check all elements are valid numbers
+    if (arr.some(v => typeof v === 'string' && v !== '')) {
+        // Allow strings but they must be non-empty
+        if (arr.some(v => v === '')) return { valid: false, arr: [] };
+    }
+
+    return { valid: true, arr };
+}
+
+// Read target from the dedicated input field
+function parseTargetFromField() {
+    const field = document.getElementById('param-target');
+    if (!field) return { valid: false, target: null };
+
+    const raw = field.value.trim();
+    if (!raw) return { valid: false, target: null };
+
+    const num = Number(raw);
+    const target = isNaN(num) ? raw : num;
+    return { valid: true, target };
+}
+
+// Validate param fields and return parsed values or error
+function validateParamFields(presetKey) {
+    const arrResult = parseArrFromField();
+    if (!arrResult.valid) {
+        return {
+            valid: false,
+            errorAr: translations.ar['param-arr-invalid'],
+            errorEn: translations.en['param-arr-invalid']
+        };
+    }
+
+    let target = null;
+    if (presetKey === 'linear' || presetKey === 'binary') {
+        const targetResult = parseTargetFromField();
+        if (!targetResult.valid) {
+            return {
+                valid: false,
+                errorAr: translations.ar['param-target-invalid'],
+                errorEn: translations.en['param-target-invalid']
+            };
+        }
+        target = targetResult.target;
+    }
+
+    return { valid: true, arr: arrResult.arr, target };
+}
+
+function generateLinearSearchTrace(arr, target) {
+    const trace = [];
+    
+    // Step 0: Initial state
+    trace.push({
+        linePy: 5, lineJs: 5,
+        statusAr: `تم تهيئة البحث الخطي. سنبحث عن الهدف ${target} في مصفوفة مخصصة: [${arr.join(', ')}].`,
+        statusEn: `Linear search initialized. We will search for target ${target} in your custom array: [${arr.join(', ')}].`,
+        array: [...arr],
+        pointers: {},
+        activeSlots: [],
+        variables: { target: target }
+    });
+
+    let foundIndex = -1;
+    for (let i = 0; i < arr.length; i++) {
+        // Step A: Loop iteration i
+        trace.push({
+            linePy: 6, lineJs: 6,
+            statusAr: `بدء الحلقة التكرارية. فحص العنصر عند الفهرس i = ${i}.`,
+            statusEn: `Loop iteration. Checking element at index i = ${i}.`,
+            array: [...arr],
+            pointers: { i: i },
+            activeSlots: [i],
+            variables: { target: target, i: i }
+        });
+
+        // Step B: Compare
+        if (arr[i] == target) {
+            trace.push({
+                linePy: 7, lineJs: 7,
+                statusAr: `مقارنة العنصر: هل القيمة ${arr[i]} تساوي ${target}؟ نعم! لقد وجدنا الهدف.`,
+                statusEn: `Comparing element: Does value ${arr[i]} equal ${target}? Yes! Target found.`,
+                array: [...arr],
+                pointers: { i: i },
+                activeSlots: [i],
+                variables: { target: target, i: i },
                 isSuccess: true
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "إرجاع الفهرس 5 كـ نتيجة نجاح للبحث.",
-                statusEn: "Returning index 5 as successful search result.",
-                array: [12, 5, 8, 19, 3, 7, 21],
-                pointers: { i: 5 },
-                activeSlots: [5],
-                variables: { target: 7, i: 5, result: 5 },
+            });
+
+            trace.push({
+                linePy: 8, lineJs: 8,
+                statusAr: `إرجاع الفهرس ${i} كـ نتيجة نجاح للبحث.`,
+                statusEn: `Returning index ${i} as successful search result.`,
+                array: [...arr],
+                pointers: { i: i },
+                activeSlots: [i],
+                variables: { target: target, i: i, result: i },
                 isSuccess: true
-            }
-        ],
-        binary: [
-            {
-                linePy: 1, lineJs: 1,
-                statusAr: "تم تهيئة البحث الثنائي للبحث عن الهدف 23 في مصفوفة مرتبة.",
-                statusEn: "Binary search initialized. We will search for target 23 in a sorted array.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: {},
-                activeSlots: [],
-                variables: { target: 23 }
-            },
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "تعيين المؤشر الأيسر left = 0.",
-                statusEn: "Setting left boundary pointer left = 0.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 0 },
-                activeSlots: [],
-                variables: { target: 23, left: 0 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "تعيين المؤشر الأيمن right = 8 (آخر عنصر في المصفوفة).",
-                statusEn: "Setting right boundary pointer right = 8 (last element).",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 0, right: 8 },
-                activeSlots: [],
-                variables: { target: 23, left: 0, right: 8 }
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "التحقق من شرط حلقة التكرار: هل left (0) <= right (8)؟ نعم.",
-                statusEn: "Checking loop condition: Is left (0) <= right (8)? Yes.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 0, right: 8 },
-                activeSlots: [],
-                variables: { target: 23, left: 0, right: 8 }
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "حساب مؤشر المنتصف: mid = (left + right) // 2 = (0 + 8) // 2 = 4.",
-                statusEn: "Calculating middle pointer: mid = (left + right) // 2 = 4.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 0, right: 8, mid: 4 },
-                activeSlots: [4],
-                variables: { target: 23, left: 0, right: 8, mid: 4 }
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "مقارنة القيمة الوسطى: هل arr[mid] (16) تساوي 23؟ لا.",
-                statusEn: "Comparing middle value: Does arr[mid] (16) equal 23? No.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 0, right: 8, mid: 4 },
-                activeSlots: [4],
-                variables: { target: 23, left: 0, right: 8, mid: 4 }
-            },
-            {
-                linePy: 8, lineJs: 8,
-                statusAr: "هل القيمة الوسطى arr[mid] (16) أصغر من 23؟ نعم. النصف الأيسر مستبعد.",
-                statusEn: "Is arr[mid] (16) < 23? Yes. Eliminating the left half.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 0, right: 8, mid: 4 },
-                activeSlots: [4],
-                variables: { target: 23, left: 0, right: 8, mid: 4 },
-                grayedRange: [0, 4]
-            },
-            {
-                linePy: 9, lineJs: 9,
-                statusAr: "تحديث المؤشر الأيسر ليصبح left = mid + 1 = 5.",
-                statusEn: "Updating left pointer to left = mid + 1 = 5.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 8 },
-                activeSlots: [],
-                variables: { target: 23, left: 5, right: 8 },
-                grayedRange: [0, 4]
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "التحقق من شرط حلقة التكرار: هل left (5) <= right (8)؟ نعم.",
-                statusEn: "Checking loop condition: Is left (5) <= right (8)? Yes.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 8 },
-                activeSlots: [],
-                variables: { target: 23, left: 5, right: 8 },
-                grayedRange: [0, 4]
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "حساب مؤشر المنتصف الجديد: mid = (5 + 8) // 2 = 6.",
-                statusEn: "Calculating new middle pointer: mid = (5 + 8) // 2 = 6.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 8, mid: 6 },
-                activeSlots: [6],
-                variables: { target: 23, left: 5, right: 8, mid: 6 },
-                grayedRange: [0, 4]
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "مقارنة القيمة الوسطى: هل arr[mid] (38) تساوي 23؟ لا.",
-                statusEn: "Comparing middle value: Does arr[mid] (38) equal 23? No.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 8, mid: 6 },
-                activeSlots: [6],
-                variables: { target: 23, left: 5, right: 8, mid: 6 },
-                grayedRange: [0, 4]
-            },
-            {
-                linePy: 8, lineJs: 8,
-                statusAr: "هل arr[mid] (38) أصغر من 23؟ لا. وبالتالي هي أكبر. النصف الأيمن مستبعد.",
-                statusEn: "Is arr[mid] (38) < 23? No. Thus it is larger. Eliminating the right half.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 8, mid: 6 },
-                activeSlots: [6],
-                variables: { target: 23, left: 5, right: 8, mid: 6 },
-                grayedRange: [0, 4, 6, 8]
-            },
-            {
+            });
+            foundIndex = i;
+            break;
+        } else {
+            trace.push({
+                linePy: 7, lineJs: 7,
+                statusAr: `هل القيمة ${arr[i]} تساوي ${target}؟ لا. سنستمر في البحث.`,
+                statusEn: `Does value ${arr[i]} equal ${target}? No. Continuing the search.`,
+                array: [...arr],
+                pointers: { i: i },
+                activeSlots: [i],
+                variables: { target: target, i: i }
+            });
+        }
+    }
+
+    if (foundIndex === -1) {
+        trace.push({
+            linePy: 9, lineJs: 11,
+            statusAr: `تم فحص جميع العناصر ولم يتم العثور على الهدف ${target}. إرجاع -1.`,
+            statusEn: `All elements checked. Target ${target} not found. Returning -1.`,
+            array: [...arr],
+            pointers: {},
+            activeSlots: [],
+            variables: { target: target, result: -1 }
+        });
+    }
+
+    return trace;
+}
+
+function generateBinarySearchTrace(arr, target) {
+    const isSorted = arr.every((v, i) => i === 0 || v >= arr[i - 1]);
+    const workingArr = [...arr];
+    if (!isSorted) {
+        workingArr.sort((a, b) => (typeof a === 'number' && typeof b === 'number') ? a - b : String(a).localeCompare(String(b)));
+    }
+
+    const trace = [];
+    
+    // Step 0: Init
+    trace.push({
+        linePy: 5, lineJs: 5,
+        statusAr: `تم تهيئة البحث الثنائي. الهدف هو ${target}. المصفوفة المرتبة هي [${workingArr.join(', ')}].` + (!isSorted ? " (تم ترتيب مصفوفتك تلقائياً للبحث الثنائي)" : ""),
+        statusEn: `Binary search initialized. Target is ${target}. Sorted array is [${workingArr.join(', ')}].` + (!isSorted ? " (Your array was auto-sorted for binary search)" : ""),
+        array: [...workingArr],
+        pointers: {},
+        activeSlots: [],
+        variables: { target: target }
+    });
+
+    let left = 0;
+    let right = workingArr.length - 1;
+    
+    trace.push({
+        linePy: 6, lineJs: 6,
+        statusAr: `تعيين المؤشر الأيسر left = 0.`,
+        statusEn: `Setting left boundary pointer left = 0.`,
+        array: [...workingArr],
+        pointers: { left: 0 },
+        activeSlots: [],
+        variables: { target: target, left: 0 }
+    });
+
+    trace.push({
+        linePy: 7, lineJs: 7,
+        statusAr: `تعيين المؤشر الأيمن right = ${right}.`,
+        statusEn: `Setting right boundary pointer right = ${right}.`,
+        array: [...workingArr],
+        pointers: { left: 0, right: right },
+        activeSlots: [],
+        variables: { target: target, left: 0, right: right }
+    });
+
+    let foundIndex = -1;
+    let iterations = 0;
+    const maxIterations = 20;
+
+    while (left <= right && iterations < maxIterations) {
+        iterations++;
+        
+        trace.push({
+            linePy: 8, lineJs: 8,
+            statusAr: `التحقق من شرط التكرار: هل left (${left}) <= right (${right})؟ نعم.`,
+            statusEn: `Checking loop condition: Is left (${left}) <= right (${right})? Yes.`,
+            array: [...workingArr],
+            pointers: { left: left, right: right },
+            activeSlots: [],
+            variables: { target: target, left: left, right: right },
+            grayedRange: getGrayedRange(workingArr.length, left, right)
+        });
+
+        const mid = Math.floor((left + right) / 2);
+
+        trace.push({
+            linePy: 9, lineJs: 9,
+            statusAr: `حساب مؤشر المنتصف: mid = (${left} + ${right}) // 2 = ${mid}. قيمة العنصر الوسط هي ${workingArr[mid]}.`,
+            statusEn: `Calculating middle pointer: mid = (${left} + ${right}) // 2 = ${mid}. Middle element is ${workingArr[mid]}.`,
+            array: [...workingArr],
+            pointers: { left: left, right: right, mid: mid },
+            activeSlots: [mid],
+            variables: { target: target, left: left, right: right, mid: mid },
+            grayedRange: getGrayedRange(workingArr.length, left, right)
+        });
+
+        if (workingArr[mid] == target) {
+            trace.push({
+                linePy: 10, lineJs: 10,
+                statusAr: `هل العنصر الأوسط ${workingArr[mid]} يساوي الهدف ${target}؟ نعم! لقد وجدنا الهدف.`,
+                statusEn: `Does middle element ${workingArr[mid]} equal target ${target}? Yes! Target found.`,
+                array: [...workingArr],
+                pointers: { left: left, right: right, mid: mid },
+                activeSlots: [mid],
+                variables: { target: target, left: left, right: right, mid: mid },
+                isSuccess: true,
+                grayedRange: getGrayedRange(workingArr.length, left, right)
+            });
+
+            trace.push({
                 linePy: 11, lineJs: 11,
-                statusAr: "تحديث المؤشر الأيمن ليصبح right = mid - 1 = 5.",
-                statusEn: "Updating right pointer to right = mid - 1 = 5.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 5 },
-                activeSlots: [],
-                variables: { target: 23, left: 5, right: 5 },
-                grayedRange: [0, 4, 6, 8]
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "التحقق من شرط حلقة التكرار: هل left (5) <= right (5)؟ نعم.",
-                statusEn: "Checking loop condition: Is left (5) <= right (5)? Yes.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 5 },
-                activeSlots: [],
-                variables: { target: 23, left: 5, right: 5 },
-                grayedRange: [0, 4, 6, 8]
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "حساب مؤشر المنتصف: mid = (5 + 5) // 2 = 5.",
-                statusEn: "Calculating middle pointer: mid = (5 + 5) // 2 = 5.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 5, mid: 5 },
-                activeSlots: [5],
-                variables: { target: 23, left: 5, right: 5, mid: 5 },
-                grayedRange: [0, 4, 6, 8]
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "هل arr[mid] (23) تساوي الهدف 23؟ نعم! لقد عثرنا على الهدف.",
-                statusEn: "Does arr[mid] (23) equal target 23? Yes! Target found.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 5, mid: 5 },
-                activeSlots: [5],
-                variables: { target: 23, left: 5, right: 5, mid: 5 },
+                statusAr: `إرجاع الفهرس ${mid} كـ نتيجة نجاح للبحث.`,
+                statusEn: `Returning index ${mid} as successful search result.`,
+                array: [...workingArr],
+                pointers: { left: left, right: right, mid: mid },
+                activeSlots: [mid],
+                variables: { target: target, left: left, right: right, mid: mid, result: mid },
                 isSuccess: true,
-                grayedRange: [0, 4, 6, 8]
-            },
-            {
+                grayedRange: getGrayedRange(workingArr.length, left, right)
+            });
+            foundIndex = mid;
+            break;
+        } else if (workingArr[mid] < target) {
+            trace.push({
+                linePy: 12, lineJs: 12,
+                statusAr: `هل العنصر الأوسط ${workingArr[mid]} أصغر من الهدف ${target}؟ نعم. النصف الأيسر مستبعد.`,
+                statusEn: `Is middle element ${workingArr[mid]} < target ${target}? Yes. Eliminating left half.`,
+                array: [...workingArr],
+                pointers: { left: left, right: right, mid: mid },
+                activeSlots: [mid],
+                variables: { target: target, left: left, right: right, mid: mid },
+                grayedRange: getGrayedRange(workingArr.length, left, mid)
+            });
+
+            left = mid + 1;
+
+            trace.push({
+                linePy: 13, lineJs: 13,
+                statusAr: `تحديث المؤشر الأيسر ليصبح left = mid + 1 = ${left}.`,
+                statusEn: `Updating left pointer to left = mid + 1 = ${left}.`,
+                array: [...workingArr],
+                pointers: { left: left, right: right },
+                activeSlots: [],
+                variables: { target: target, left: left, right: right },
+                grayedRange: getGrayedRange(workingArr.length, left, right)
+            });
+        } else {
+            trace.push({
+                linePy: 14, lineJs: 14,
+                statusAr: `هل العنصر الأوسط ${workingArr[mid]} أصغر من الهدف ${target}؟ لا، بل هو أكبر. النصف الأيمن مستبعد.`,
+                statusEn: `Is middle element ${workingArr[mid]} < target ${target}? No, it is larger. Eliminating right half.`,
+                array: [...workingArr],
+                pointers: { left: left, right: right, mid: mid },
+                activeSlots: [mid],
+                variables: { target: target, left: left, right: right, mid: mid },
+                grayedRange: getGrayedRange(workingArr.length, mid, right)
+            });
+
+            right = mid - 1;
+
+            trace.push({
+                linePy: 15, lineJs: 15,
+                statusAr: `تحديث المؤشر الأيمن ليصبح right = mid - 1 = ${right}.`,
+                statusEn: `Updating right pointer to right = mid - 1 = ${right}.`,
+                array: [...workingArr],
+                pointers: { left: left, right: right },
+                activeSlots: [],
+                variables: { target: target, left: left, right: right },
+                grayedRange: getGrayedRange(workingArr.length, left, right)
+            });
+        }
+    }
+
+    if (foundIndex === -1) {
+        trace.push({
+            linePy: 16, lineJs: 18,
+            statusAr: `انتهت الحلقة ولم يتم العثور على الهدف ${target}. إرجاع -1.`,
+            statusEn: `Loop finished. Target ${target} not found. Returning -1.`,
+            array: [...workingArr],
+            pointers: {},
+            activeSlots: [],
+            variables: { target: target, result: -1 }
+        });
+    }
+
+    return trace;
+}
+
+function getGrayedRange(length, left, right) {
+    const range = [];
+    for (let i = 0; i < length; i++) {
+        if (i < left || i > right) {
+            range.push(i);
+        }
+    }
+    return range;
+}
+
+function generateBubbleSortTrace(arr) {
+    const trace = [];
+    const workingArr = [...arr];
+    const n = workingArr.length;
+
+    trace.push({
+        linePy: 4, lineJs: 4,
+        statusAr: `بدء فرز الفقاعات لترتيب المصفوفة تصاعدياً: [${workingArr.join(', ')}].`,
+        statusEn: `Bubble sort initialized to sort array in ascending order: [${workingArr.join(', ')}].`,
+        array: [...workingArr],
+        pointers: {},
+        activeSlots: [],
+        variables: {}
+    });
+
+    const sortedIndices = [];
+
+    for (let i = 0; i < n; i++) {
+        trace.push({
+            linePy: 6, lineJs: 6,
+            statusAr: `بدء المرور الخارجي i = ${i}.`,
+            statusEn: `Starting outer loop iteration i = ${i}.`,
+            array: [...workingArr],
+            pointers: {},
+            activeSlots: [],
+            variables: { i: i },
+            sortedRange: [...sortedIndices]
+        });
+
+        for (let j = 0; j < n - i - 1; j++) {
+            trace.push({
                 linePy: 7, lineJs: 7,
-                statusAr: "إرجاع الفهرس 5 بنجاح.",
-                statusEn: "Returning index 5 successfully.",
-                array: [2, 5, 8, 12, 16, 23, 38, 56, 72],
-                pointers: { left: 5, right: 5, mid: 5 },
-                activeSlots: [5],
-                variables: { target: 23, left: 5, right: 5, mid: 5, result: 5 },
-                isSuccess: true,
-                grayedRange: [0, 4, 6, 8]
+                statusAr: `مقارنة العنصرين عند الفهرس j = ${j} و ${j + 1}: هل ${workingArr[j]} > ${workingArr[j + 1]}؟`,
+                statusEn: `Comparing elements at index j = ${j} and ${j + 1}: Is ${workingArr[j]} > ${workingArr[j + 1]}?`,
+                array: [...workingArr],
+                pointers: { j: j },
+                activeSlots: [j, j + 1],
+                variables: { i: i, j: j },
+                sortedRange: [...sortedIndices]
+            });
+
+            if (workingArr[j] > workingArr[j + 1]) {
+                trace.push({
+                    linePy: 8, lineJs: 8,
+                    statusAr: `نعم، ${workingArr[j]} > ${workingArr[j + 1]}. يجب مبادلة العنصرين لترتيبهما.`,
+                    statusEn: `Yes, ${workingArr[j]} > ${workingArr[j + 1]}. We must swap them to sort.`,
+                    array: [...workingArr],
+                    pointers: { j: j },
+                    activeSlots: [j, j + 1],
+                    variables: { i: i, j: j },
+                    sortedRange: [...sortedIndices]
+                });
+
+                const temp = workingArr[j];
+                workingArr[j] = workingArr[j + 1];
+                workingArr[j + 1] = temp;
+
+                trace.push({
+                    linePy: 9, lineJs: 10,
+                    statusAr: `إجراء عملية المبادلة. أصبحت المصفوفة الآن: [${workingArr.join(', ')}].`,
+                    statusEn: `Performing swap. The array is now: [${workingArr.join(', ')}].`,
+                    array: [...workingArr],
+                    pointers: { j: j },
+                    activeSlots: [j, j + 1],
+                    variables: { i: i, j: j },
+                    isSwap: true,
+                    sortedRange: [...sortedIndices]
+                });
+            } else {
+                trace.push({
+                    linePy: 8, lineJs: 8,
+                    statusAr: `لا، ${workingArr[j]} ليست أكبر من ${workingArr[j + 1]}. لا مبادلة.`,
+                    statusEn: `No, ${workingArr[j]} is not > ${workingArr[j + 1]}. No swap needed.`,
+                    array: [...workingArr],
+                    pointers: { j: j },
+                    activeSlots: [j, j + 1],
+                    variables: { i: i, j: j },
+                    sortedRange: [...sortedIndices]
+                });
             }
-        ],
-        bubble: [
-            {
-                linePy: 1, lineJs: 1,
-                statusAr: "فرز الفقاعات مجهّز لترتيب المصفوفة تصاعدياً: [5, 1, 4, 2, 8].",
-                statusEn: "Bubble sort initialized to sort array in ascending order: [5, 1, 4, 2, 8].",
-                array: [5, 1, 4, 2, 8],
-                pointers: {},
-                activeSlots: [],
-                variables: {}
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "بدء المرور الخارجي i = 0.",
-                statusEn: "Starting outer loop iteration i = 0.",
-                array: [5, 1, 4, 2, 8],
-                pointers: {},
-                activeSlots: [],
-                variables: { i: 0 }
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "بدء الحلقة الداخلية j = 0. مقارنة العنصرين 5 و 1.",
-                statusEn: "Starting inner loop iteration j = 0. Comparing elements 5 and 1.",
-                array: [5, 1, 4, 2, 8],
-                pointers: { j: 0 },
-                activeSlots: [0, 1],
-                variables: { i: 0, j: 0 }
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "بما أن 5 > 1، يجب مبادلة العنصرين لترتيبهما.",
-                statusEn: "Since 5 > 1, we must swap them to sort.",
-                array: [5, 1, 4, 2, 8],
-                pointers: { j: 0 },
-                activeSlots: [0, 1],
-                variables: { i: 0, j: 0 }
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "إجراء عملية المبادلة. أصبحت المصفوفة الآن: [1, 5, 4, 2, 8].",
-                statusEn: "Performing swap. The array is now: [1, 5, 4, 2, 8].",
-                array: [1, 5, 4, 2, 8],
-                pointers: { j: 0 },
-                activeSlots: [0, 1],
-                variables: { i: 0, j: 0 },
-                isSwap: true
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "الخطوة التالية j = 1. مقارنة العنصرين 5 و 4.",
-                statusEn: "Next step j = 1. Comparing elements 5 and 4.",
-                array: [1, 5, 4, 2, 8],
-                pointers: { j: 1 },
-                activeSlots: [1, 2],
-                variables: { i: 0, j: 1 }
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "بما أن 5 > 4، يجب مبادلة العنصرين.",
-                statusEn: "Since 5 > 4, we must swap them.",
-                array: [1, 5, 4, 2, 8],
-                pointers: { j: 1 },
-                activeSlots: [1, 2],
-                variables: { i: 0, j: 1 }
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "إجراء المبادلة. أصبحت المصفوفة الآن: [1, 4, 5, 2, 8].",
-                statusEn: "Performing swap. The array is now: [1, 4, 5, 2, 8].",
-                array: [1, 4, 5, 2, 8],
-                pointers: { j: 1 },
-                activeSlots: [1, 2],
-                variables: { i: 0, j: 1 },
-                isSwap: true
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "الخطوة التالية j = 2. مقارنة العنصرين 5 و 2.",
-                statusEn: "Next step j = 2. Comparing elements 5 and 2.",
-                array: [1, 4, 5, 2, 8],
-                pointers: { j: 2 },
-                activeSlots: [2, 3],
-                variables: { i: 0, j: 2 }
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "بما أن 5 > 2، يجب مبادلة العنصرين.",
-                statusEn: "Since 5 > 2, we must swap them.",
-                array: [1, 4, 5, 2, 8],
-                pointers: { j: 2 },
-                activeSlots: [2, 3],
-                variables: { i: 0, j: 2 }
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "إجراء المبادلة. أصبحت المصفوفة الآن: [1, 4, 2, 5, 8].",
-                statusEn: "Performing swap. The array is now: [1, 4, 2, 5, 8].",
-                array: [1, 4, 2, 5, 8],
-                pointers: { j: 2 },
-                activeSlots: [2, 3],
-                variables: { i: 0, j: 2 },
-                isSwap: true
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "الخطوة التالية j = 3. مقارنة العنصرين 5 و 8.",
-                statusEn: "Next step j = 3. Comparing elements 5 and 8.",
-                array: [1, 4, 2, 5, 8],
-                pointers: { j: 3 },
-                activeSlots: [3, 4],
-                variables: { i: 0, j: 3 }
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "هل 5 > 8؟ لا. لا تحتاج المصفوفة لمبادلة هنا.",
-                statusEn: "Is 5 > 8? No. No swap needed here.",
-                array: [1, 4, 2, 5, 8],
-                pointers: { j: 3 },
-                activeSlots: [3, 4],
-                variables: { i: 0, j: 3 }
-            },
-            {
-                linePy: 3, lineJs: 3,
-                statusAr: "انتهى المرور الأول. العنصر الأكبر 8 استقر في الفهرس الأخير. بدء المرور i = 1.",
-                statusEn: "First pass complete. Largest element 8 settled at the last index. Starting pass i = 1.",
-                array: [1, 4, 2, 5, 8],
-                pointers: {},
-                activeSlots: [],
-                variables: { i: 1 },
-                sortedRange: [4]
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "مقارنة جولة i=1، الفهرس j = 0: هل 1 > 4؟ لا. لا مبادلة.",
-                statusEn: "Pass i=1, compare j = 0: Is 1 > 4? No. No swap.",
-                array: [1, 4, 2, 5, 8],
-                pointers: { j: 0 },
-                activeSlots: [0, 1],
-                variables: { i: 1, j: 0 },
-                sortedRange: [4]
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "الانتقال إلى الفهرس j = 1: مقارنة 4 و 2.",
-                statusEn: "Moving to index j = 1: Comparing 4 and 2.",
-                array: [1, 4, 2, 5, 8],
-                pointers: { j: 1 },
-                activeSlots: [1, 2],
-                variables: { i: 1, j: 1 },
-                sortedRange: [4]
-            },
-            {
-                linePy: 5, lineJs: 5,
-                statusAr: "بما أن 4 > 2، يجب مبادلة العنصرين.",
-                statusEn: "Since 4 > 2, we must swap them.",
-                array: [1, 4, 2, 5, 8],
-                pointers: { j: 1 },
-                activeSlots: [1, 2],
-                variables: { i: 1, j: 1 },
-                sortedRange: [4]
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "إجراء المبادلة. أصبحت المصفوفة الآن: [1, 2, 4, 5, 8].",
-                statusEn: "Performing swap. The array is now: [1, 2, 4, 5, 8].",
-                array: [1, 2, 4, 5, 8],
-                pointers: { j: 1 },
-                activeSlots: [1, 2],
-                variables: { i: 1, j: 1 },
-                isSwap: true,
-                sortedRange: [4]
-            },
-            {
-                linePy: 7, lineJs: 7,
-                statusAr: "اكتمل فرز المصفوفة تصاعدياً بنجاح! جميع العناصر مرتبة.",
-                statusEn: "Bubble sort completed successfully! All elements are sorted.",
-                array: [1, 2, 4, 5, 8],
-                pointers: {},
-                activeSlots: [],
-                variables: {},
-                isSuccess: true,
-                sortedRange: [0, 1, 2, 3, 4]
-            }
-        ],
-        implicit: [
-            {
-                linePy: 2, lineJs: 2,
-                statusAr: "تهيئة مصفوفة غير محددة الحجم. تظهر العناصر الخمسة الأولى، بينما تتلاشى بقية المساحة.",
-                statusEn: "Initializing Implicit Size Array. The first five elements are shown, while the rest fades.",
-                array: [10, 20, 30, 40, 50],
-                pointers: {},
-                activeSlots: [],
-                variables: {},
-                isImplicit: true
-            },
-            {
-                linePy: 4, lineJs: 4,
-                statusAr: "قراءة العنصر عند الفهرس 0: القيمة هي 10.",
-                statusEn: "Reading element at index 0: Value is 10.",
-                array: [10, 20, 30, 40, 50],
-                pointers: { ptr: 0 },
-                activeSlots: [0],
-                variables: { index: 0, val: 10 },
-                isImplicit: true
-            },
-            {
-                linePy: 6, lineJs: 6,
-                statusAr: "الوصول المباشر للعنصر عند الفهرس 3: القيمة هي 40.",
-                statusEn: "Directly accessing element at index 3: Value is 40.",
-                array: [10, 20, 30, 40, 50],
-                pointers: { ptr: 3 },
-                activeSlots: [3],
-                variables: { index: 3, val: 40 },
-                isImplicit: true
-            },
-            {
-                linePy: 8, lineJs: 8,
-                statusAr: "الوصول إلى الفهرس 5 (في المنطقة الافتراضية المتلاشية). هذا يوضح كيف يمكن للمصفوفة أن تنمو ديناميكياً.",
-                statusEn: "Accessing index 5 (inside the virtual fading zone). This illustrates how the array expands dynamically.",
-                array: [10, 20, 30, 40, 50],
-                pointers: { ptr: 5 },
-                activeSlots: [5],
-                variables: { index: 5, val: "..." },
-                isImplicit: true,
-                isSuccess: true
-            }
-        ]
-    };
+        }
+
+        sortedIndices.push(n - i - 1);
+        
+        trace.push({
+            linePy: 6, lineJs: 6,
+            statusAr: `اكتمل المرور الخارجي i = ${i}. العنصر عند الفهرس ${n - i - 1} استقر في مكانه النهائي.`,
+            statusEn: `Outer loop iteration i = ${i} complete. Element at index ${n - i - 1} is now in its sorted position.`,
+            array: [...workingArr],
+            pointers: {},
+            activeSlots: [],
+            variables: { i: i },
+            sortedRange: [...sortedIndices]
+        });
+    }
+
+    trace.push({
+        linePy: 10, lineJs: 15,
+        statusAr: `اكتمل فرز المصفوفة تصاعدياً بنجاح! جميع العناصر مرتبة.`,
+        statusEn: `Bubble sort completed successfully! All elements are sorted.`,
+        array: [...workingArr],
+        pointers: {},
+        activeSlots: [],
+        variables: {},
+        isSuccess: true,
+        sortedRange: Array.from({ length: n }, (_, k) => k)
+    });
+
+    return trace;
+}
+
+function generateImplicitTrace(arr) {
+    const trace = [];
+    const workingArr = [...arr];
+
+    trace.push({
+        linePy: 2, lineJs: 2,
+        statusAr: "تهيئة مصفوفة غير محددة الحجم. تظهر العناصر الأولى، بينما تتلاشى بقية المساحة.",
+        statusEn: "Initializing Implicit Size Array. The first elements are shown, while the rest fades.",
+        array: [...workingArr],
+        pointers: {},
+        activeSlots: [],
+        variables: {},
+        isImplicit: true
+    });
+
+    trace.push({
+        linePy: 3, lineJs: 3,
+        statusAr: `قراءة العنصر عند الفهرس 0: القيمة هي ${workingArr[0] !== undefined ? workingArr[0] : '?'}.`,
+        statusEn: `Reading element at index 0: Value is ${workingArr[0] !== undefined ? workingArr[0] : '?'}.`,
+        array: [...workingArr],
+        pointers: { ptr: 0 },
+        activeSlots: [0],
+        variables: { index: 0, val: workingArr[0] !== undefined ? workingArr[0] : '?' },
+        isImplicit: true
+    });
+
+    const idx = Math.min(3, workingArr.length - 1);
+    trace.push({
+        linePy: 4, lineJs: 4,
+        statusAr: `الوصول المباشر للعنصر عند الفهرس ${idx}: القيمة هي ${workingArr[idx] !== undefined ? workingArr[idx] : '?'}.`,
+        statusEn: `Directly accessing element at index ${idx}: Value is ${workingArr[idx] !== undefined ? workingArr[idx] : '?'}.`,
+        array: [...workingArr],
+        pointers: { ptr: idx },
+        activeSlots: [idx],
+        variables: { index: idx, val: workingArr[idx] !== undefined ? workingArr[idx] : '?' },
+        isImplicit: true
+    });
+
+    trace.push({
+        linePy: 5, lineJs: 5,
+        statusAr: "الوصول إلى الفهرس 5 (في المنطقة الافتراضية المتلاشية). هذا يوضح كيف يمكن للمصفوفة أن تنمو ديناميكياً.",
+        statusEn: "Accessing index 5 (inside the virtual fading zone). This illustrates how the array expands dynamically.",
+        array: [...workingArr],
+        pointers: { ptr: 5 },
+        activeSlots: [5],
+        variables: { index: 5, val: "..." },
+        isImplicit: true,
+        isSuccess: true
+    });
+
+    return trace;
+}
+function showValidationErrorPlaceholder(errorAr, errorEn) {
+    visualArena.innerHTML = '';
+    const placeholder = document.createElement('div');
+    placeholder.className = 'unsupported-visualization-placeholder validation-error';
+
+    const title = document.createElement('div');
+    title.className = 'unsupported-title';
+    title.style.color = 'var(--color-crimson)';
+    title.innerText = (currentLang === 'ar') ? 'تنبيه: مدخلات غير صالحة' : 'WARNING: INVALID INPUT';
+
+    const desc = document.createElement('p');
+    desc.className = 'unsupported-desc';
+    desc.innerText = (currentLang === 'ar') ? errorAr : errorEn;
+
+    placeholder.appendChild(title);
+    placeholder.appendChild(desc);
+    visualArena.appendChild(placeholder);
+
+    btnPrev.disabled = true;
+    btnNext.disabled = true;
+    btnPlayPause.innerText = '▶️';
+    isPlaying = false;
+    clearInterval(simulationInterval);
+    if (speedLines) speedLines.classList.remove('active');
+}
+
+function updateTraceFromParams() {
+    const algo = currentPreset;
+
+    const validation = validateParamFields(algo);
+    if (!validation.valid) {
+        showValidationErrorPlaceholder(validation.errorAr, validation.errorEn);
+        return;
+    }
+
+    const { arr, target } = validation;
+    
+    if (algo === 'linear') {
+        traces['linear'] = generateLinearSearchTrace(arr, target);
+    } else if (algo === 'binary') {
+        traces['binary'] = generateBinarySearchTrace(arr, target);
+    } else if (algo === 'bubble') {
+        traces['bubble'] = generateBubbleSortTrace(arr);
+    } else if (algo === 'implicit') {
+        traces['implicit'] = generateImplicitTrace(arr);
+    }
+    
+    const trace = traces[algo];
+    if (trace) {
+        if (currentStep >= trace.length) {
+            currentStep = Math.max(0, trace.length - 1);
+        }
+        renderStep(currentStep);
+    }
 }
 
 // ----------------------------------------------------
@@ -1023,6 +1061,15 @@ function renderStep(stepIndex) {
     row.className = 'array-row';
 
     const arr = step.array;
+
+    // Dynamically calculate slot size to fit container width without cropping
+    const totalSlots = arr.length + (step.isImplicit ? 3 : 0);
+    const containerMaxWidth = 720; // safe width to fit within 850px max-width including padding
+    const gap = 8;
+    const computedSize = Math.floor((containerMaxWidth - (totalSlots - 1) * gap) / totalSlots);
+    const slotSize = Math.min(88, Math.max(45, computedSize));
+    container.style.setProperty('--slot-size', `${slotSize}px`);
+
     arr.forEach((val, idx) => {
         const slot = document.createElement('div');
         slot.className = 'array-slot';
@@ -1067,36 +1114,35 @@ function renderStep(stepIndex) {
             const pointersContainer = document.createElement('div');
             pointersContainer.className = 'slot-pointers';
 
-            ptrNames.forEach(name => {
-                const marker = document.createElement('div');
-                marker.className = 'pointer-marker';
+            const marker = document.createElement('div');
+            marker.className = 'pointer-marker';
 
-                const label = document.createElement('div');
-                label.className = 'pointer-label';
-                label.innerText = name;
+            const label = document.createElement('div');
+            label.className = 'pointer-label';
+            // Combine multiple pointers pointing to the same index into a single, clean label
+            label.innerText = ptrNames.join(currentLang === 'ar' ? '، ' : ', ');
 
-                // Create SVG arrow pointing down
-                const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-                svg.setAttribute('class', 'pointer-arrow-svg');
-                svg.setAttribute('width', '20');
-                svg.setAttribute('height', '20');
-                svg.setAttribute('viewBox', '0 0 20 20');
+            // Create SVG arrow pointing down
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'pointer-arrow-svg');
+            svg.setAttribute('width', '20');
+            svg.setAttribute('height', '20');
+            svg.setAttribute('viewBox', '0 0 20 20');
 
-                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                path.setAttribute('class', 'arrow-shaft');
-                path.setAttribute('d', 'M10,0 L10,12');
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('class', 'arrow-shaft');
+            path.setAttribute('d', 'M10,0 L10,12');
 
-                const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-                poly.setAttribute('class', 'arrow-head');
-                poly.setAttribute('points', '6,10 10,18 14,10');
+            const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+            poly.setAttribute('class', 'arrow-head');
+            poly.setAttribute('points', '6,10 10,18 14,10');
 
-                svg.appendChild(path);
-                svg.appendChild(poly);
+            svg.appendChild(path);
+            svg.appendChild(poly);
 
-                marker.appendChild(label);
-                marker.appendChild(svg);
-                pointersContainer.appendChild(marker);
-            });
+            marker.appendChild(label);
+            marker.appendChild(svg);
+            pointersContainer.appendChild(marker);
             slot.appendChild(pointersContainer);
         }
 
@@ -1126,17 +1172,21 @@ function renderStep(stepIndex) {
             const label = document.createElement('div');
             label.className = 'pointer-label';
             label.innerText = 'ptr';
+            
             const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
             svg.setAttribute('class', 'pointer-arrow-svg');
             svg.setAttribute('width', '20');
             svg.setAttribute('height', '20');
             svg.setAttribute('viewBox', '0 0 20 20');
+            
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('class', 'arrow-shaft');
             path.setAttribute('d', 'M10,0 L10,12');
+            
             const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             poly.setAttribute('class', 'arrow-head');
             poly.setAttribute('points', '6,10 10,18 14,10');
+            
             svg.appendChild(path);
             svg.appendChild(poly);
             marker.appendChild(label);
@@ -1254,7 +1304,7 @@ function updateLanguageUI(lang) {
     }
 }
 
-// Load default presets code into the editor
+// Load default presets code into the editor and populate param fields
 function loadPreset(presetKey) {
     currentPreset = presetKey;
     currentStep = 0;
@@ -1267,15 +1317,36 @@ function loadPreset(presetKey) {
         speedLines.classList.remove('active');
     }
 
-    // Sync input code
+    // Sync input code (read-only display)
     codeInput.value = presetCodes[activeTab][presetKey];
     syncLineNumbers();
     
     // Select option in dropdown if not already selected
     presetSelect.value = presetKey;
 
-    // Render step 0
-    renderStep(0);
+    // Populate parameter fields from preset defaults
+    const params = presetParams[presetKey];
+    const arrField = document.getElementById('param-arr');
+    const targetField = document.getElementById('param-target');
+    const targetWrapper = document.getElementById('param-field-target');
+
+    if (arrField && params) {
+        arrField.value = params.arr.join(', ');
+    }
+    if (targetField && params) {
+        targetField.value = params.showTarget ? params.target : '';
+    }
+    // Show/hide target field based on algorithm
+    if (targetWrapper) {
+        if (params && params.showTarget) {
+            targetWrapper.classList.remove('hidden');
+        } else {
+            targetWrapper.classList.add('hidden');
+        }
+    }
+
+    // Generate trace from param fields
+    updateTraceFromParams();
 }
 
 // ----------------------------------------------------
@@ -1331,39 +1402,26 @@ function registerEvents() {
         loadPreset(presetSelect.value);
     });
 
-    // 5. Code Editor scroll synchronization and manual edits
-    codeInput.addEventListener('input', () => {
-        syncLineNumbers();
-        
-        // Try to match preset
-        const matched = validateAndMatchPreset();
-        if (matched) {
-            if (currentPreset !== matched) {
-                currentPreset = matched;
-                currentStep = 0;
-                presetSelect.value = matched;
-            }
-            renderStep(currentStep);
-        } else {
-            showUnsupportedPlaceholder();
-        }
-    });
+    // 5. Parameter field input listeners (re-generate trace on change)
+    const paramArr = document.getElementById('param-arr');
+    const paramTarget = document.getElementById('param-target');
 
+    if (paramArr) {
+        paramArr.addEventListener('input', () => {
+            currentStep = 0;
+            updateTraceFromParams();
+        });
+    }
+    if (paramTarget) {
+        paramTarget.addEventListener('input', () => {
+            currentStep = 0;
+            updateTraceFromParams();
+        });
+    }
+
+    // Code editor scroll sync (read-only, but still scrollable)
     codeInput.addEventListener('scroll', () => {
         lineNumbersContainer.scrollTop = codeInput.scrollTop;
-    });
-
-    // Handle Tab key inside editor
-    codeInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            const start = codeInput.selectionStart;
-            const end = codeInput.selectionEnd;
-            const value = codeInput.value;
-            codeInput.value = value.substring(0, start) + "    " + value.substring(end);
-            codeInput.selectionStart = codeInput.selectionEnd = start + 4;
-            syncLineNumbers();
-        }
     });
 
     // 6. Execution controls: Next, Prev, Reset, Play/Pause
@@ -1435,9 +1493,6 @@ function registerEvents() {
 // INITIALIZATION
 // ----------------------------------------------------
 function init() {
-    // Generate static simulation traces database
-    traces = getTraceDatabase();
-
     // Default configuration (RTL - Arabic)
     updateLanguageUI('ar');
 

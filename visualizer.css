@@ -206,6 +206,72 @@ html[dir="rtl"] .btn-back-home {
     cursor: pointer;
 }
 
+/* Parameter Input Fields Bar */
+.param-inputs-bar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.param-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+}
+
+.param-field label {
+    font-family: var(--font-display);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-ink);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.param-input {
+    border: var(--border-manga-thin);
+    padding: 9px 12px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14px;
+    font-weight: 600;
+    background: #fffdf7;
+    color: var(--color-ink);
+    border-radius: 6px;
+    box-shadow: 3px 3px 0px var(--color-ink);
+    outline: none;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    direction: ltr !important;
+    text-align: left !important;
+}
+
+.param-input:focus {
+    border-color: var(--color-crimson);
+    box-shadow: 3px 3px 0px var(--color-crimson), 0 0 0 2px rgba(220, 38, 38, 0.15);
+}
+
+.param-input::placeholder {
+    color: #aaa;
+    font-weight: 400;
+}
+
+.param-input-small {
+    max-width: 100px;
+}
+
+.param-field.hidden {
+    display: none;
+}
+
+/* Readonly code textarea visual indicator */
+#code-input[readonly] {
+    cursor: default;
+    opacity: 0.85;
+}
+
 .editor-wrapper {
     flex-grow: 1;
     display: flex;
@@ -472,7 +538,7 @@ html[dir="rtl"] .array-title {
     display: flex;
     flex-wrap: nowrap;
     gap: 8px;
-    overflow: hidden; /* Prevent scrolling in the visualizer area */
+    overflow: visible; /* Show pointers pointing out of the slots */
     justify-content: center; /* Center boxes horizontally */
     padding: 8px 4px;
 }
@@ -601,13 +667,14 @@ html[dir="rtl"] .array-title {
     background-color: var(--color-ink);
     color: white;
     font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 11px;
-    padding: 3px 8px;
+    font-weight: 900;
+    font-size: 12px;
+    padding: 4px 10px;
     border-radius: 4px;
     box-shadow: 2px 2px 0px var(--color-crimson);
     white-space: nowrap;
     margin-bottom: 4px;
+    border: 2px solid white;
 }
 
 .pointer-arrow-svg {

@@ -62,12 +62,24 @@
                         </div>
                     </div>
 
-                    <!-- Editor input area with custom styling -->
+                    <!-- Parameter Input Fields -->
+                    <div class="param-inputs-bar" id="param-inputs-bar">
+                        <div class="param-field" id="param-field-arr">
+                            <label for="param-arr" data-key="param-arr-label">المصفوفة // Array</label>
+                            <input type="text" id="param-arr" class="param-input" placeholder="e.g. 12, 5, 8, 19, 3, 7, 21" spellcheck="false" autocomplete="off">
+                        </div>
+                        <div class="param-field" id="param-field-target">
+                            <label for="param-target" data-key="param-target-label">الهدف // Target</label>
+                            <input type="text" id="param-target" class="param-input param-input-small" placeholder="e.g. 7" spellcheck="false" autocomplete="off">
+                        </div>
+                    </div>
+
+                    <!-- Editor input area with custom styling (READ-ONLY) -->
                     <div class="editor-wrapper">
                         <div class="line-numbers" id="line-numbers">
                             <span>1</span>
                         </div>
-                        <textarea id="code-input" spellcheck="false" autocomplete="off" placeholder="اكتب كود بايثون هنا..."></textarea>
+                        <textarea id="code-input" spellcheck="false" autocomplete="off" readonly placeholder="اختر خوارزمية من القائمة أعلاه..."></textarea>
                     </div>
                 </div>
             </div>

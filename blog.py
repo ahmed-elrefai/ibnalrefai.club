@@ -27,6 +27,7 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     delete,
+    func,
     inspect,
     select,
     text,
@@ -722,6 +723,158 @@ def list_blog_posts() -> list[dict]:
             select(BlogPost).order_by(BlogPost.updated_at.desc(), BlogPost.id.desc())
         )
         return [_tool_post(post) for post in posts]
+
+
+@mcp.tool()
+def get_blog_analytics(
+    days: Annotated[int, "Recent activity window: 7, 30, or 90 days"] = 30,
+    limit: Annotated[int, "Maximum number of posts in ranked results, from 1 to 100"] = 20,
+) -> dict:
+    """Report current published-post views and likes, recent activity, rankings, and engagement insights."""
+    _require_blog_owner()
+    if days not in {7, 30, 90}:
+        raise ValueError("days must be 7, 30, or 90")
+    if not 1 <= limit <= 100:
+        raise ValueError("limit must be between 1 and 100")
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
+    with _tool_session() as db:
+        posts = list(
+            db.scalars(
+                select(BlogPost)
+                .where(BlogPost.is_published.is_(True))
+                .order_by(BlogPost.view_count.desc(), BlogPost.id.desc())
+            )
+        )
+        draft_count = db.scalar(
+            select(func.count()).select_from(BlogPost).where(
+                BlogPost.is_published.is_(False)
+            )
+        )
+        post_ids = [post.id for post in posts]
+        if post_ids:
+            recent_views = dict(
+                db.execute(
+                    select(BlogView.post_id, func.count())
+                    .where(
+                        BlogView.post_id.in_(post_ids),
+                        BlogView.last_viewed_at >= cutoff,
+                    )
+                    .group_by(BlogView.post_id)
+                ).all()
+            )
+            recent_likes = dict(
+                db.execute(
+                    select(BlogLike.post_id, func.count())
+                    .where(
+                        BlogLike.post_id.in_(post_ids),
+                        BlogLike.created_at >= cutoff,
+                    )
+                    .group_by(BlogLike.post_id)
+                ).all()
+            )
+        else:
+            recent_views = {}
+            recent_likes = {}
+
+        ranked_posts = [
+            {
+                "slug": post.slug,
+                "title": post.title,
+                "views": post.view_count,
+                "likes": post.like_count,
+                "like_rate_percent": (
+                    round(post.like_count / post.view_count * 100, 1)
+                    if post.view_count
+                    else None
+                ),
+                "recent_viewers": recent_views.get(post.id, 0),
+                "recent_likes": recent_likes.get(post.id, 0),
+                "url": f"{SITE_URL}/blog/{post.slug}",
+            }
+            for post in posts
+        ]
+
+    total_views = sum(post["views"] for post in ranked_posts)
+    total_likes = sum(post["likes"] for post in ranked_posts)
+    insights = []
+    if ranked_posts:
+        top_views = max(ranked_posts, key=lambda post: post["views"])
+        top_likes = max(ranked_posts, key=lambda post: post["likes"])
+        insights.append(
+            {
+                "type": "most_viewed",
+                "slug": top_views["slug"],
+                "title": top_views["title"],
+                "views": top_views["views"],
+            }
+        )
+        insights.append(
+            {
+                "type": "most_liked",
+                "slug": top_likes["slug"],
+                "title": top_likes["title"],
+                "likes": top_likes["likes"],
+            }
+        )
+        eligible = [post for post in ranked_posts if post["views"] >= 10]
+        if eligible:
+            best_rate = max(eligible, key=lambda post: post["like_rate_percent"])
+            insights.append(
+                {
+                    "type": "highest_like_rate",
+                    "minimum_views": 10,
+                    "slug": best_rate["slug"],
+                    "title": best_rate["title"],
+                    "like_rate_percent": best_rate["like_rate_percent"],
+                }
+            )
+        for post in ranked_posts:
+            if post["views"] >= 10 and post["likes"] == 0:
+                insights.append(
+                    {
+                        "type": "views_without_likes",
+                        "slug": post["slug"],
+                        "title": post["title"],
+                        "views": post["views"],
+                        "suggestion": "Review the article's call to action and share it with a relevant audience.",
+                    }
+                )
+
+    return {
+        "generated_at": now.isoformat(),
+        "published_posts": len(ranked_posts),
+        "draft_posts": draft_count or 0,
+        "all_time": {
+            "views": total_views,
+            "likes": total_likes,
+            "like_rate_percent": round(total_likes / total_views * 100, 1)
+            if total_views
+            else None,
+        },
+        "recent_activity": {
+            "window_days": days,
+            "viewer_post_records": sum(
+                post["recent_viewers"] for post in ranked_posts
+            ),
+            "likes_added_and_still_active": sum(
+                post["recent_likes"] for post in ranked_posts
+            ),
+            "definitions": {
+                "viewer_post_records": (
+                    "Distinct visitor-post records whose last counted view is in this window; "
+                    "the same visitor can count once per post, and repeat visits are deduplicated "
+                    "for 24 hours, so this is not total view events or site-wide unique visitors."
+                ),
+                "likes_added_and_still_active": (
+                    "Currently active likes created in this window; removed likes are not included."
+                ),
+            },
+        },
+        "top_posts": ranked_posts[:limit],
+        "insights": insights,
+    }
 
 
 @mcp.tool()

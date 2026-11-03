@@ -65,7 +65,7 @@ verified Supabase token's user ID against `BLOG_OWNER_USER_ID`; other signed-in
 users cannot read drafts or modify posts.
 The MCP tools can list, create, update, publish, permanently delete posts, and
 retrieve blog analytics. `get_blog_analytics` reports all-time totals, ranked
-posts, 7/30/90-day recent activity, and engagement signals. Recent viewer
+posts, 24-hour/7/30/90-day recent activity, and engagement signals. Recent viewer
 activity is based on deduplicated visitor-post records (not raw view events),
 and recent likes include only likes still active at report time. Deletion
 requires explicit confirmation of the post slug and also removes its stored

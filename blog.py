@@ -727,13 +727,13 @@ def list_blog_posts() -> list[dict]:
 
 @mcp.tool()
 def get_blog_analytics(
-    days: Annotated[int, "Recent activity window: 7, 30, or 90 days"] = 30,
+    days: Annotated[int, "Recent activity window: 1 (rolling 24 hours), 7, 30, or 90 days"] = 30,
     limit: Annotated[int, "Maximum number of posts in ranked results, from 1 to 100"] = 20,
 ) -> dict:
     """Report current published-post views and likes, recent activity, rankings, and engagement insights."""
     _require_blog_owner()
-    if days not in {7, 30, 90}:
-        raise ValueError("days must be 7, 30, or 90")
+    if days not in {1, 7, 30, 90}:
+        raise ValueError("days must be 1 (rolling 24 hours), 7, 30, or 90")
     if not 1 <= limit <= 100:
         raise ValueError("limit must be between 1 and 100")
 

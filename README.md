@@ -63,6 +63,9 @@ The deployed consent screen lets the owner sign in using a one-time email link
 and approve or deny the requesting MCP client. All MCP blog tools check the
 verified Supabase token's user ID against `BLOG_OWNER_USER_ID`; other signed-in
 users cannot read drafts or modify posts.
+The MCP tools can list, create, update, publish, and permanently delete posts.
+Deletion requires explicit confirmation of the post slug and also removes its
+stored views and likes.
 
 Connect the MCP client to `https://www.ibnalrefai.club/mcp` using OAuth. Enter
 the manually registered client ID and, only for a confidential client, its

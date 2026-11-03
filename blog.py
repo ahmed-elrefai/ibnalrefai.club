@@ -821,3 +821,25 @@ def publish_blog_post(slug: Annotated[str, "Slug returned by create_blog_post or
             db.commit()
             db.refresh(post)
         return _tool_post(post)
+
+
+@mcp.tool()
+def delete_blog_post(
+    slug: Annotated[str, "Slug returned by create_blog_post or list_blog_posts"],
+    confirm: Annotated[bool, "Must be true to permanently delete the post and its engagement data"],
+) -> dict:
+    """Permanently delete a blog post and its views and likes. Requires explicit confirmation."""
+    _require_blog_owner()
+    if not confirm:
+        raise ValueError("Deletion not performed. Set confirm=true only after verifying the post slug.")
+
+    with _tool_session() as db:
+        post = db.scalar(select(BlogPost).where(BlogPost.slug == slug))
+        if post is None:
+            raise ValueError(f"No blog post found with slug '{slug}'")
+        deleted_post = {"slug": post.slug, "title": post.title}
+        db.execute(delete(BlogView).where(BlogView.post_id == post.id))
+        db.execute(delete(BlogLike).where(BlogLike.post_id == post.id))
+        db.delete(post)
+        db.commit()
+        return {"deleted": True, **deleted_post}

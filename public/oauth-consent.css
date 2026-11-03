@@ -1,0 +1,136 @@
+:root {
+    color: #171717;
+    background: #f4f3f0;
+    font-family: "Segoe UI", sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    display: grid;
+    min-height: 100vh;
+    margin: 0;
+    padding: 24px;
+    place-items: center;
+    background-image: radial-gradient(#17171712 0.7px, transparent 0.7px);
+    background-size: 7px 7px;
+}
+
+.consent-card {
+    width: min(100%, 520px);
+    padding: clamp(24px, 6vw, 42px);
+    background: #fff;
+    border: 2px solid #171717;
+    box-shadow: 8px 8px 0 #171717;
+}
+
+.brand {
+    color: #171717;
+    font-size: 1.15rem;
+    font-weight: 900;
+    text-decoration: none;
+}
+
+.eyebrow {
+    margin: 32px 0 8px;
+    color: #a8182a;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+}
+
+h1 {
+    margin: 0;
+    font-size: clamp(1.8rem, 6vw, 2.5rem);
+}
+
+.intro,
+.muted,
+.privacy {
+    color: #555;
+    line-height: 1.6;
+}
+
+label {
+    display: block;
+    margin: 22px 0 8px;
+    font-weight: 700;
+}
+
+input {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #aaa;
+    border-radius: 5px;
+    font: inherit;
+}
+
+button {
+    padding: 11px 16px;
+    color: #fff;
+    font: inherit;
+    font-weight: 700;
+    background: #a8182a;
+    border: 2px solid #a8182a;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+form button {
+    width: 100%;
+    margin-top: 14px;
+}
+
+button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+h2 {
+    margin-bottom: 8px;
+    font-size: 1.1rem;
+}
+
+pre {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+    padding: 14px;
+    background: #f4f3f0;
+    border-radius: 5px;
+    font: 0.9rem/1.6 Consolas, monospace;
+}
+
+.warning,
+.status {
+    color: #a8182a;
+    line-height: 1.6;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 22px;
+}
+
+.actions .secondary {
+    color: #171717;
+    background: #fff;
+    border-color: #777;
+}
+
+.text-button {
+    margin-top: 16px;
+    padding: 0;
+    color: #555;
+    background: transparent;
+    border: 0;
+    text-decoration: underline;
+}
+
+.privacy {
+    margin: 28px 0 0;
+    font-size: 0.85rem;
+}

@@ -13,7 +13,9 @@ import bleach
 import markdown
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
+from fastmcp.server.auth.providers.supabase import SupabaseProvider
+from fastmcp.server.dependencies import get_access_token
 from sqlalchemy import (
     Boolean,
     DateTime,
@@ -53,7 +55,21 @@ engine = (
 )
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False) if engine else None
 router = APIRouter()
-mcp = FastMCP("Ahmed Elrefai Blog", stateless_http=True)
+BASE_URL = os.getenv("BASE_URL", "https://www.ibnalrefai.club").rstrip("/")
+SUPABASE_PROJECT_URL = os.getenv("SUPABASE_PROJECT_URL", "").rstrip("/")
+SUPABASE_JWT_ALGORITHM = os.getenv("SUPABASE_JWT_ALGORITHM", "ES256")
+BLOG_OWNER_USER_ID = os.getenv("BLOG_OWNER_USER_ID", "")
+
+auth_provider = (
+    SupabaseProvider(
+        project_url=SUPABASE_PROJECT_URL,
+        base_url=BASE_URL,
+        algorithm=SUPABASE_JWT_ALGORITHM,
+    )
+    if SUPABASE_PROJECT_URL
+    else None
+)
+mcp = FastMCP("Ahmed Elrefai Blog", auth=auth_provider)
 
 
 class Base(DeclarativeBase):
@@ -139,13 +155,13 @@ def _session():
 def _visitor_identity(
     request: Request, *, required: bool = True
 ) -> tuple[str | None, str | None, bool]:
-    secret = os.getenv("BLOG_ANALYTICS_SECRET") or os.getenv("BLOG_MCP_TOKEN")
+    secret = os.getenv("BLOG_ANALYTICS_SECRET")
     if not secret or len(secret) < 32:
         if not required:
             return None, None, False
         raise HTTPException(
             status_code=503,
-            detail="Set BLOG_ANALYTICS_SECRET or a BLOG_MCP_TOKEN of at least 32 characters to enable blog interactions.",
+            detail="Set BLOG_ANALYTICS_SECRET to a secret of at least 32 characters to enable blog interactions.",
         )
     signing_key = hmac.new(
         secret.encode("utf-8"),
@@ -659,9 +675,25 @@ def _tool_post(post: BlogPost) -> dict:
     }
 
 
+def _require_blog_owner() -> None:
+    if not BLOG_OWNER_USER_ID:
+        raise RuntimeError(
+            "BLOG_OWNER_USER_ID is not configured; blog MCP tools are disabled."
+        )
+    access_token = get_access_token()
+    if access_token is None:
+        raise PermissionError("Supabase OAuth authentication is required.")
+    user_id = access_token.claims.get("sub") or access_token.claims.get("user_id")
+    if not isinstance(user_id, str) or not hmac.compare_digest(
+        user_id, BLOG_OWNER_USER_ID
+    ):
+        raise PermissionError("Only the configured blog owner can use blog MCP tools.")
+
+
 @mcp.tool()
 def list_blog_posts() -> list[dict]:
     """List blog posts, including drafts, for the authenticated site owner."""
+    _require_blog_owner()
     with _tool_session() as db:
         posts = db.scalars(
             select(BlogPost).order_by(BlogPost.updated_at.desc(), BlogPost.id.desc())
@@ -679,6 +711,7 @@ def create_blog_post(
     publish: Annotated[bool, "Publish immediately; defaults to a private draft"] = False,
 ) -> dict:
     """Create a blog draft, or publish it immediately when publish=true."""
+    _require_blog_owner()
     title = title.strip()
     if not title or len(title) > 180:
         raise ValueError("title must contain 1 to 180 characters")
@@ -721,6 +754,7 @@ def update_blog_post(
     meta_description: Annotated[str, "Replacement SEO description; leave empty to keep current"] = "",
 ) -> dict:
     """Update an existing blog draft or published post without changing its publication state."""
+    _require_blog_owner()
     with _tool_session() as db:
         post = db.scalar(select(BlogPost).where(BlogPost.slug == slug))
         if post is None:
@@ -751,6 +785,7 @@ def update_blog_post(
 @mcp.tool()
 def publish_blog_post(slug: Annotated[str, "Slug returned by create_blog_post or list_blog_posts"]) -> dict:
     """Publish a draft so it appears on the public blog and sitemap."""
+    _require_blog_owner()
     with _tool_session() as db:
         post = db.scalar(select(BlogPost).where(BlogPost.slug == slug))
         if post is None:

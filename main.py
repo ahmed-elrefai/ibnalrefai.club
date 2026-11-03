@@ -1,4 +1,3 @@
-import hmac
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -6,15 +5,24 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse
 
-from blog import initialize_database, mcp, router
+from blog import (
+    BLOG_OWNER_USER_ID,
+    SUPABASE_PROJECT_URL,
+    auth_provider,
+    initialize_database,
+    mcp,
+    router,
+)
 
 PUBLIC_DIR = Path(__file__).resolve().parent / "public"
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+mcp_app = mcp.http_app(path="/mcp", transport="streamable-http", stateless_http=True)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     initialize_database()
-    async with mcp.session_manager.run():
+    async with mcp_app.router.lifespan_context(mcp_app):
         yield
 
 
@@ -28,20 +36,12 @@ app.include_router(router)
 
 
 @app.middleware("http")
-async def authenticate_mcp(request: Request, call_next):
+async def require_oauth_configuration(request: Request, call_next):
     if request.url.path == "/mcp" or request.url.path.startswith("/mcp/"):
-        expected_token = os.getenv("BLOG_MCP_TOKEN")
-        if not expected_token:
+        if auth_provider is None:
             return JSONResponse(
                 status_code=503,
-                content={"detail": "BLOG_MCP_TOKEN is not configured"},
-            )
-        supplied_token = request.headers.get("authorization", "")
-        if not hmac.compare_digest(supplied_token, f"Bearer {expected_token}"):
-            return JSONResponse(
-                status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
-                content={"detail": "Invalid MCP bearer token"},
+                content={"detail": "SUPABASE_PROJECT_URL is not configured for MCP OAuth"},
             )
     return await call_next(request)
 
@@ -71,6 +71,16 @@ async def serve_blog_js():
     return FileResponse(PUBLIC_DIR / "blog.js")
 
 
+@app.get("/oauth-consent.css", include_in_schema=False)
+async def serve_oauth_consent_css():
+    return FileResponse(PUBLIC_DIR / "oauth-consent.css")
+
+
+@app.get("/oauth-consent.js", include_in_schema=False)
+async def serve_oauth_consent_js():
+    return FileResponse(PUBLIC_DIR / "oauth-consent.js")
+
+
 @app.get("/me.webp", include_in_schema=False)
 async def serve_me_webp():
     return FileResponse(PUBLIC_DIR / "me.webp", media_type="image/webp")
@@ -91,5 +101,29 @@ async def robots_txt():
     return FileResponse(PUBLIC_DIR / "robots.txt", media_type="text/plain")
 
 
-# FastMCP serves its /mcp path internally; mounting last preserves the site routes above.
-app.mount("/", mcp.streamable_http_app())
+@app.get("/oauth/consent", include_in_schema=False)
+async def oauth_consent():
+    return FileResponse(
+        PUBLIC_DIR / "oauth-consent.html",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+@app.get("/oauth/config", include_in_schema=False)
+async def oauth_config():
+    if not SUPABASE_PROJECT_URL or not SUPABASE_ANON_KEY or not BLOG_OWNER_USER_ID:
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Supabase OAuth consent is not fully configured"},
+        )
+    return JSONResponse(
+        {
+            "project_url": SUPABASE_PROJECT_URL,
+            "anon_key": SUPABASE_ANON_KEY,
+            "owner_user_id": BLOG_OWNER_USER_ID,
+        },
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+app.mount("/", mcp_app)

@@ -3,6 +3,6 @@ uvicorn[standard]>=0.22.0
 pydantic>=2.0.0
 bleach>=6.0,<7.0
 markdown>=3.5,<4.0
-mcp>=1.9,<2.0
+fastmcp>=2.13,<3.0
 psycopg[binary]>=3.1,<4.0
 sqlalchemy>=2.0,<3.0

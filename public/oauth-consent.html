@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Authorize blog access | Ahmed Elrefai</title>
+  <link rel="stylesheet" href="/oauth-consent.css">
+  <script type="module" src="/oauth-consent.js"></script>
+</head>
+<body>
+  <main class="consent-card">
+    <a class="brand" href="/">// Ahmed Elrefai</a>
+    <p class="eyebrow">SECURE MCP CONNECTION</p>
+    <h1>Authorize blog access</h1>
+    <p class="intro">Sign in to review and approve this AI client's access to your blog tools.</p>
+
+    <section id="login-panel" hidden>
+      <form id="login-form">
+        <label for="email">Your Supabase account email</label>
+        <input id="email" name="email" type="email" autocomplete="email" required>
+        <button type="submit">Email me a sign-in link</button>
+      </form>
+    </section>
+
+    <section id="approval-panel" hidden>
+      <p id="signed-in-user" class="muted"></p>
+      <h2>Application requesting access</h2>
+      <pre id="client-details"></pre>
+      <p id="authorization-warning" class="warning" hidden></p>
+      <div class="actions">
+        <button id="deny-button" class="secondary" type="button">Deny</button>
+        <button id="approve-button" type="button">Approve access</button>
+      </div>
+      <button id="sign-out-button" class="text-button" type="button">Sign out</button>
+    </section>
+
+    <p id="status" class="status" role="status" aria-live="polite">Loading authorization request…</p>
+    <p class="privacy">Only the configured blog owner can approve access. You can revoke an AI client from Supabase Auth settings.</p>
+  </main>
+</body>
+</html>

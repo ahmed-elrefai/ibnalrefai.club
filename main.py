@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from blog import (
     BLOG_OWNER_USER_ID,
@@ -108,9 +108,13 @@ async def robots_txt():
 
 
 @app.get("/oauth/consent", include_in_schema=False)
-async def oauth_consent():
-    return FileResponse(
-        PUBLIC_DIR / "oauth-consent.html",
+async def oauth_consent(request: Request):
+    target = "/oauth-consent.html"
+    if request.url.query:
+        target = f"{target}?{request.url.query}"
+    return RedirectResponse(
+        target,
+        status_code=307,
         headers={"Cache-Control": "no-store"},
     )
 

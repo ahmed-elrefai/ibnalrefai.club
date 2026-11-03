@@ -10,17 +10,10 @@ COPY requirements.txt .
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all application files (main.py, index.html, JS, CSS, images)
+# Copy application files
 COPY main.py .
-COPY index.html .
-COPY app.js .
-COPY style.css .
-COPY visualizer.html .
-COPY visualizer.js .
-COPY visualizer.css .
-COPY me.webp .
-COPY refai_stats_card.webp .
-COPY favicon.ico .
+COPY blog.py .
+COPY public/ ./public/
 
 # Expose port 8000 for FastAPI / Uvicorn
 EXPOSE 8000

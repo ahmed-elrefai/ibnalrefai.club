@@ -246,15 +246,6 @@ html[dir="rtl"] .nav-link::after {
     width: 100%;
 }
 
-.nav-link.highlight {
-    color: var(--color-crimson);
-    border-bottom: 2px dashed var(--color-crimson);
-}
-
-.nav-link.highlight::after {
-    display: none;
-}
-
 .header-actions {
     display: flex;
     gap: 16px;
@@ -1845,5 +1836,4 @@ html[lang="en"] .tagline-text {
     transform: none;
     box-shadow: 2px 2px 0px var(--color-ink);
 }
-
 

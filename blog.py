@@ -1,0 +1,765 @@
+import html
+import hashlib
+import hmac
+import json
+import os
+import re
+import unicodedata
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Annotated
+
+import bleach
+import markdown
+from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi.responses import HTMLResponse, JSONResponse
+from mcp.server.fastmcp import FastMCP
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    create_engine,
+    delete,
+    inspect,
+    select,
+    text,
+    update,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+
+SITE_URL = "https://ibnalrefai.club"
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+elif DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
+engine = (
+    create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=1,
+        max_overflow=0,
+        pool_recycle=300,
+        connect_args={"prepare_threshold": None},
+    )
+    if DATABASE_URL
+    else None
+)
+SessionLocal = sessionmaker(bind=engine, expire_on_commit=False) if engine else None
+router = APIRouter()
+mcp = FastMCP("Ahmed Elrefai Blog", stateless_http=True)
+
+
+class Base(DeclarativeBase):
+    pass
+
+
+class BlogPost(Base):
+    __tablename__ = "blog_posts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    slug: Mapped[str] = mapped_column(String(220), unique=True, index=True)
+    title: Mapped[str] = mapped_column(String(180))
+    summary: Mapped[str] = mapped_column(String(320), default="")
+    meta_description: Mapped[str] = mapped_column(String(320), default="")
+    content_markdown: Mapped[str] = mapped_column(Text)
+    language: Mapped[str] = mapped_column(String(5), default="ar")
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    view_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    like_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+
+class BlogView(Base):
+    __tablename__ = "blog_views"
+    __table_args__ = (
+        UniqueConstraint("post_id", "visitor_hash", name="uq_blog_views_post_visitor"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("blog_posts.id", ondelete="CASCADE"))
+    visitor_hash: Mapped[str] = mapped_column(String(64))
+    last_viewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BlogLike(Base):
+    __tablename__ = "blog_likes"
+    __table_args__ = (
+        UniqueConstraint("post_id", "visitor_hash", name="uq_blog_likes_post_visitor"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    post_id: Mapped[int] = mapped_column(ForeignKey("blog_posts.id", ondelete="CASCADE"))
+    visitor_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+
+
+def initialize_database() -> None:
+    if engine is None:
+        return
+    Base.metadata.create_all(bind=engine)
+    columns = {column["name"] for column in inspect(engine).get_columns("blog_posts")}
+    with engine.begin() as connection:
+        for column in ("view_count", "like_count"):
+            if column not in columns:
+                connection.execute(
+                    text(
+                        f"ALTER TABLE blog_posts ADD COLUMN "
+                        f"{'IF NOT EXISTS ' if engine.dialect.name == 'postgresql' else ''}{column} "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
+                )
+
+
+def _session():
+    if SessionLocal is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Blog database is not configured; set DATABASE_URL to a PostgreSQL connection string.",
+        )
+    return SessionLocal()
+
+
+def _visitor_identity(
+    request: Request, *, required: bool = True
+) -> tuple[str | None, str | None, bool]:
+    secret = os.getenv("BLOG_ANALYTICS_SECRET") or os.getenv("BLOG_MCP_TOKEN")
+    if not secret or len(secret) < 32:
+        if not required:
+            return None, None, False
+        raise HTTPException(
+            status_code=503,
+            detail="Set BLOG_ANALYTICS_SECRET or a BLOG_MCP_TOKEN of at least 32 characters to enable blog interactions.",
+        )
+    signing_key = hmac.new(
+        secret.encode("utf-8"),
+        b"ibnalrefai-blog-visitor-cookie-v1",
+        hashlib.sha256,
+    ).digest()
+    cookie = request.cookies.get("blog_visitor", "")
+    visitor_id, separator, signature = cookie.partition(".")
+    valid = bool(
+        separator
+        and re.fullmatch(r"[0-9a-f]{32}", visitor_id)
+        and hmac.compare_digest(
+            signature,
+            hmac.new(signing_key, visitor_id.encode("ascii"), hashlib.sha256).hexdigest(),
+        )
+    )
+    if not valid:
+        visitor_id = uuid.uuid4().hex
+        signature = hmac.new(
+            signing_key, visitor_id.encode("ascii"), hashlib.sha256
+        ).hexdigest()
+    visitor_hash = hashlib.sha256(visitor_id.encode("ascii")).hexdigest()
+    return visitor_hash, f"{visitor_id}.{signature}", not valid
+
+
+def _set_visitor_cookie(response: Response, request: Request, cookie: str) -> None:
+    response.set_cookie(
+        "blog_visitor",
+        cookie,
+        max_age=60 * 60 * 24 * 365,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        path="/",
+    )
+
+
+def _insert_once(session, model, values: dict, constraint: str, where=None) -> bool:
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert
+        conflict_target = {"constraint": constraint}
+    elif dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert
+        conflict_target = {
+            "index_elements": [model.post_id, model.visitor_hash]
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Blog interaction storage does not support database dialect '{dialect}'.",
+        )
+    statement = insert(model).values(**values).on_conflict_do_nothing(
+        **conflict_target
+    )
+    if where is not None:
+        statement = insert(model).values(**values).on_conflict_do_update(
+            **conflict_target,
+            set_={"last_viewed_at": values["last_viewed_at"]},
+            where=where,
+        )
+    return session.execute(statement.returning(model.id)).scalar_one_or_none() is not None
+
+
+def _write_interaction_cookie(
+    response: Response, request: Request, cookie: str | None, created: bool
+) -> Response:
+    if created and cookie:
+        _set_visitor_cookie(response, request, cookie)
+    return response
+
+
+def _slugify(title: str) -> str:
+    normalized = unicodedata.normalize("NFKC", title).casefold()
+    slug = re.sub(r"[^\w]+", "-", normalized, flags=re.UNICODE).strip("-_")
+    return slug[:200].strip("-_") or "post"
+
+
+def _content_html(content: str) -> str:
+    rendered = markdown.markdown(
+        content,
+        extensions=["fenced_code", "tables"],
+        output_format="html",
+    )
+    return bleach.clean(
+        rendered,
+        tags={
+            "a", "blockquote", "br", "code", "del", "em", "h1", "h2", "h3",
+            "h4", "hr", "li", "ol", "p", "pre", "strong", "table", "tbody",
+            "td", "th", "thead", "tr", "ul",
+        },
+        attributes={"a": ["href", "title"], "code": ["class"]},
+        protocols=["http", "https", "mailto"],
+        strip=True,
+    )
+
+
+def _published_posts():
+    with _session() as db:
+        return list(
+            db.scalars(
+                select(BlogPost)
+                .where(BlogPost.is_published.is_(True))
+                .order_by(BlogPost.published_at.desc(), BlogPost.id.desc())
+            )
+        )
+
+
+def _published_post_like_state(slug: str, visitor_hash: str) -> tuple[BlogPost, bool]:
+    with _session() as db:
+        post = db.scalar(
+            select(BlogPost).where(
+                BlogPost.slug == slug,
+                BlogPost.is_published.is_(True),
+            )
+        )
+        if post is None:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        liked = db.scalar(
+            select(BlogLike.id).where(
+                BlogLike.post_id == post.id,
+                BlogLike.visitor_hash == visitor_hash,
+            )
+        ) is not None
+        return post, liked
+
+
+def _get_published_post(slug: str) -> BlogPost:
+    with _session() as db:
+        post = db.scalar(
+            select(BlogPost).where(
+                BlogPost.slug == slug,
+                BlogPost.is_published.is_(True),
+            )
+        )
+        if post is None:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        return post
+
+
+def _date(value: datetime | None) -> str:
+    if value is None:
+        return ""
+    return value.strftime("%Y-%m-%d")
+
+
+def _meta_description(post: BlogPost) -> str:
+    return post.meta_description or post.summary or post.title
+
+
+def _json_ld(data: dict) -> str:
+    return json.dumps(data, ensure_ascii=False).replace("<", "\\u003c")
+
+
+def _document(
+    title: str,
+    description: str,
+    canonical: str,
+    body: str,
+    schema: dict,
+    language: str = "ar",
+    og_type: str = "website",
+) -> str:
+    direction = "rtl" if language == "ar" else "ltr"
+    home_label, blog_label = (
+        ("الرئيسية", "المدونة") if language == "ar" else ("Home", "Blog")
+    )
+    safe_title = html.escape(title)
+    safe_description = html.escape(description, quote=True)
+    safe_canonical = html.escape(canonical, quote=True)
+    return f"""<!doctype html>
+<html lang="{html.escape(language)}" dir="{direction}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{safe_title}</title>
+  <meta name="description" content="{safe_description}">
+  <link rel="canonical" href="{safe_canonical}">
+  <meta name="robots" content="index, follow">
+  <meta property="og:type" content="{og_type}">
+  <meta property="og:site_name" content="أحمد الرفاعي">
+  <meta property="og:title" content="{safe_title}">
+  <meta property="og:description" content="{safe_description}">
+  <meta property="og:url" content="{safe_canonical}">
+  <meta property="og:image" content="{SITE_URL}/refai_stats_card.webp">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script type="application/ld+json">{_json_ld(schema)}</script>
+  <link rel="stylesheet" href="/blog.css">
+</head>
+<body>
+  <header class="blog-header">
+    <a class="brand" href="/">// أحمد الرفاعي</a>
+    <nav aria-label="Main navigation"><a href="/">{home_label}</a><a href="/blog">{blog_label}</a></nav>
+  </header>
+  <main class="blog-main">{body}</main>
+  <footer class="blog-footer"><a href="/">ibnalrefai.club</a></footer>
+  <script src="/blog.js" defer></script>
+</body>
+</html>"""
+
+
+@router.get("/blog", response_class=HTMLResponse, include_in_schema=False)
+async def blog_index():
+    posts = _published_posts()
+    cards = []
+    for post in posts:
+        summary = post.summary or _meta_description(post)
+        cards.append(
+            f"""<article class="post-card">
+  <p class="post-date"><time datetime="{_date(post.published_at)}">{_date(post.published_at)}</time></p>
+  <h2><a href="/blog/{html.escape(post.slug, quote=True)}">{html.escape(post.title)}</a></h2>
+  <p>{html.escape(summary)}</p>
+  <p class="post-engagement"><span>👁 {post.view_count}</span><span>♥ {post.like_count}</span></p>
+  <a class="read-more" href="/blog/{html.escape(post.slug, quote=True)}">اقرأ المقال ←</a>
+</article>"""
+        )
+    content = "\n".join(cards) or '<p class="empty-state">لا توجد مقالات منشورة بعد. عُد قريباً!</p>'
+    body = f"""<section class="blog-intro">
+  <p class="eyebrow">BLOG // ARTICLES</p>
+  <h1>المدونة</h1>
+  <p>مقالات وأفكار عن البرمجة والذكاء الاصطناعي وبناء المنتجات.</p>
+</section>
+<section class="post-list" aria-label="المقالات">{content}</section>"""
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "Blog",
+        "name": "مدونة أحمد الرفاعي",
+        "url": f"{SITE_URL}/blog",
+        "inLanguage": "ar",
+    }
+    return _document(
+        "المدونة | أحمد الرفاعي",
+        "مقالات أحمد الرفاعي عن البرمجة والذكاء الاصطناعي وبناء المنتجات.",
+        f"{SITE_URL}/blog",
+        body,
+        schema,
+        og_type="website",
+    )
+
+
+@router.get("/blog/{slug}", response_class=HTMLResponse, include_in_schema=False)
+async def blog_detail(slug: str, request: Request):
+    visitor_hash, visitor_cookie, new_cookie = _visitor_identity(
+        request, required=False
+    )
+    if visitor_hash is None:
+        post = _get_published_post(slug)
+        liked = False
+    else:
+        post, liked = _published_post_like_state(slug, visitor_hash)
+    canonical = f"{SITE_URL}/blog/{post.slug}"
+    description = _meta_description(post)
+    like_label = "أعجبني" if post.language == "ar" else "Like"
+    unlike_label = "إلغاء الإعجاب" if post.language == "ar" else "Unlike"
+    views_label = "مشاهدة" if post.language == "ar" else "views"
+    likes_label = "إعجاب" if post.language == "ar" else "likes"
+    like_state = "true" if liked else "false"
+    liked_class = " is-liked" if liked else ""
+    body = f"""<article class="blog-article">
+  <nav class="breadcrumbs" aria-label="Breadcrumb"><a href="/">الرئيسية</a><span>/</span><a href="/blog">المدونة</a></nav>
+  <header class="article-header">
+    <p class="eyebrow">BLOG // ARTICLE</p>
+    <h1>{html.escape(post.title)}</h1>
+    <p class="post-date"><time datetime="{_date(post.published_at)}">{_date(post.published_at)}</time></p>
+    <p class="article-summary">{html.escape(post.summary)}</p>
+  </header>
+  <div class="article-content">{_content_html(post.content_markdown)}</div>
+  <section class="article-engagement" data-blog-post data-post-slug="{html.escape(post.slug, quote=True)}">
+    <p class="view-count">👁 <span data-view-count>{post.view_count}</span> {views_label}</p>
+    <div>
+      <button class="like-button{liked_class}" type="button" data-like-button
+        data-label-like="{like_label}" data-label-unlike="{unlike_label}" aria-pressed="{like_state}">
+        <span data-like-label>{like_label}</span> <span aria-hidden="true">♥</span>
+        <span data-like-count>{post.like_count}</span> <span class="like-count-label">{likes_label}</span>
+      </button>
+    </div>
+    <p class="interaction-status" data-view-status role="status" aria-live="polite"></p>
+    <p class="interaction-status" data-like-status role="status" aria-live="polite"></p>
+  </section>
+</article>"""
+    schema = {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": post.title,
+        "description": description,
+        "datePublished": post.published_at.isoformat() if post.published_at else None,
+        "dateModified": post.updated_at.isoformat() if post.updated_at else None,
+        "mainEntityOfPage": canonical,
+        "url": canonical,
+        "inLanguage": post.language,
+        "author": {"@type": "Person", "name": "Ahmed Elrefai", "url": SITE_URL},
+        "publisher": {"@type": "Person", "name": "Ahmed Elrefai"},
+    }
+    response = HTMLResponse(
+        _document(
+            f"{post.title} | أحمد الرفاعي",
+            description,
+            canonical,
+            body,
+            schema,
+            post.language,
+            og_type="article",
+        )
+    )
+    return _write_interaction_cookie(
+        response, request, visitor_cookie, new_cookie
+    )
+
+
+@router.get("/api/blogs")
+async def list_blog_posts():
+    return [
+        {
+            "slug": post.slug,
+            "title": post.title,
+            "summary": post.summary,
+            "language": post.language,
+            "views": post.view_count,
+            "likes": post.like_count,
+            "published_at": post.published_at.isoformat() if post.published_at else None,
+            "url": f"{SITE_URL}/blog/{post.slug}",
+        }
+        for post in _published_posts()
+    ]
+
+
+@router.get("/api/blogs/{slug}")
+async def get_blog_post(slug: str):
+    post = _get_published_post(slug)
+    return {
+        "slug": post.slug,
+        "title": post.title,
+        "summary": post.summary,
+        "meta_description": _meta_description(post),
+        "content_markdown": post.content_markdown,
+        "language": post.language,
+        "views": post.view_count,
+        "likes": post.like_count,
+        "published_at": post.published_at.isoformat() if post.published_at else None,
+        "url": f"{SITE_URL}/blog/{post.slug}",
+    }
+
+
+@router.post("/api/blogs/{slug}/view")
+async def record_blog_view(slug: str, request: Request):
+    visitor_hash, visitor_cookie, new_cookie = _visitor_identity(request)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+    with _session() as db:
+        post = db.scalar(
+            select(BlogPost).where(
+                BlogPost.slug == slug,
+                BlogPost.is_published.is_(True),
+            )
+        )
+        if post is None:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        counted = _insert_once(
+            db,
+            BlogView,
+            {
+                "post_id": post.id,
+                "visitor_hash": visitor_hash,
+                "last_viewed_at": now,
+            },
+            "uq_blog_views_post_visitor",
+            where=BlogView.last_viewed_at <= cutoff,
+        )
+        if counted:
+            db.execute(
+                update(BlogPost)
+                .where(BlogPost.id == post.id)
+                .values(view_count=BlogPost.view_count + 1)
+            )
+        db.commit()
+        counts = db.execute(
+            select(BlogPost.view_count, BlogPost.like_count).where(
+                BlogPost.id == post.id
+            )
+        ).one()
+    response = JSONResponse(
+        {
+            "views": counts.view_count,
+            "likes": counts.like_count,
+            "counted": counted,
+        }
+    )
+    return _write_interaction_cookie(response, request, visitor_cookie, new_cookie)
+
+
+@router.put("/api/blogs/{slug}/like")
+async def like_blog_post(slug: str, request: Request):
+    visitor_hash, visitor_cookie, new_cookie = _visitor_identity(request)
+    now = datetime.now(timezone.utc)
+    with _session() as db:
+        post = db.scalar(
+            select(BlogPost).where(
+                BlogPost.slug == slug,
+                BlogPost.is_published.is_(True),
+            )
+        )
+        if post is None:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        added = _insert_once(
+            db,
+            BlogLike,
+            {
+                "post_id": post.id,
+                "visitor_hash": visitor_hash,
+                "created_at": now,
+            },
+            "uq_blog_likes_post_visitor",
+        )
+        if added:
+            db.execute(
+                update(BlogPost)
+                .where(BlogPost.id == post.id)
+                .values(like_count=BlogPost.like_count + 1)
+            )
+        db.commit()
+        counts = db.execute(
+            select(BlogPost.view_count, BlogPost.like_count).where(
+                BlogPost.id == post.id
+            )
+        ).one()
+    response = JSONResponse(
+        {"views": counts.view_count, "likes": counts.like_count, "liked": True}
+    )
+    return _write_interaction_cookie(response, request, visitor_cookie, new_cookie)
+
+
+@router.delete("/api/blogs/{slug}/like")
+async def unlike_blog_post(slug: str, request: Request):
+    visitor_hash, visitor_cookie, new_cookie = _visitor_identity(request)
+    with _session() as db:
+        post = db.scalar(
+            select(BlogPost).where(
+                BlogPost.slug == slug,
+                BlogPost.is_published.is_(True),
+            )
+        )
+        if post is None:
+            raise HTTPException(status_code=404, detail="Blog post not found")
+        removed = db.execute(
+            delete(BlogLike)
+            .where(
+                BlogLike.post_id == post.id,
+                BlogLike.visitor_hash == visitor_hash,
+            )
+            .returning(BlogLike.id)
+        ).scalar_one_or_none() is not None
+        if removed:
+            db.execute(
+                update(BlogPost)
+                .where(BlogPost.id == post.id)
+                .values(like_count=BlogPost.like_count - 1)
+            )
+        db.commit()
+        counts = db.execute(
+            select(BlogPost.view_count, BlogPost.like_count).where(
+                BlogPost.id == post.id
+            )
+        ).one()
+    response = JSONResponse(
+        {"views": counts.view_count, "likes": counts.like_count, "liked": False}
+    )
+    return _write_interaction_cookie(response, request, visitor_cookie, new_cookie)
+
+
+@router.get("/sitemap.xml", include_in_schema=False)
+async def sitemap():
+    locations = [
+        f"<url><loc>{SITE_URL}/</loc></url>",
+        f"<url><loc>{SITE_URL}/blog</loc></url>",
+    ]
+    for post in _published_posts():
+        locations.append(
+            f"<url><loc>{SITE_URL}/blog/{html.escape(post.slug)}</loc>"
+            f"<lastmod>{_date(post.updated_at)}</lastmod></url>"
+        )
+    xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+        + "".join(locations)
+        + "</urlset>"
+    )
+    return Response(content=xml, media_type="application/xml")
+
+
+def _tool_session():
+    if SessionLocal is None:
+        raise RuntimeError(
+            "Blog database is not configured; set DATABASE_URL to a PostgreSQL connection string."
+        )
+    return SessionLocal()
+
+
+def _tool_post(post: BlogPost) -> dict:
+    return {
+        "slug": post.slug,
+        "title": post.title,
+        "summary": post.summary,
+        "language": post.language,
+        "views": post.view_count,
+        "likes": post.like_count,
+        "published": post.is_published,
+        "url": f"{SITE_URL}/blog/{post.slug}" if post.is_published else None,
+    }
+
+
+@mcp.tool()
+def list_blog_posts() -> list[dict]:
+    """List blog posts, including drafts, for the authenticated site owner."""
+    with _tool_session() as db:
+        posts = db.scalars(
+            select(BlogPost).order_by(BlogPost.updated_at.desc(), BlogPost.id.desc())
+        )
+        return [_tool_post(post) for post in posts]
+
+
+@mcp.tool()
+def create_blog_post(
+    title: Annotated[str, "Article title"],
+    content_markdown: Annotated[str, "Full article body in Markdown"],
+    summary: Annotated[str, "Short excerpt shown in listings"] = "",
+    meta_description: Annotated[str, "Search-result description"] = "",
+    language: Annotated[str, "Article language: ar or en"] = "ar",
+    publish: Annotated[bool, "Publish immediately; defaults to a private draft"] = False,
+) -> dict:
+    """Create a blog draft, or publish it immediately when publish=true."""
+    title = title.strip()
+    if not title or len(title) > 180:
+        raise ValueError("title must contain 1 to 180 characters")
+    if not content_markdown.strip() or len(content_markdown) > 100_000:
+        raise ValueError("content_markdown must contain 1 to 100000 characters")
+    if language not in {"ar", "en"}:
+        raise ValueError("language must be 'ar' or 'en'")
+    if len(summary) > 320 or len(meta_description) > 320:
+        raise ValueError("summary and meta_description must be at most 320 characters")
+
+    with _tool_session() as db:
+        slug = _slugify(title)
+        if db.scalar(select(BlogPost.id).where(BlogPost.slug == slug)) is not None:
+            slug = f"{slug[:188]}-{uuid.uuid4().hex[:8]}"
+        now = datetime.now(timezone.utc)
+        post = BlogPost(
+            slug=slug,
+            title=title,
+            summary=summary.strip(),
+            meta_description=meta_description.strip(),
+            content_markdown=content_markdown,
+            language=language,
+            is_published=publish,
+            created_at=now,
+            updated_at=now,
+            published_at=now if publish else None,
+        )
+        db.add(post)
+        db.commit()
+        db.refresh(post)
+        return _tool_post(post)
+
+
+@mcp.tool()
+def update_blog_post(
+    slug: Annotated[str, "Slug returned by create_blog_post or list_blog_posts"],
+    title: Annotated[str, "Replacement title; leave empty to keep current"] = "",
+    content_markdown: Annotated[str, "Replacement Markdown; leave empty to keep current"] = "",
+    summary: Annotated[str, "Replacement excerpt; leave empty to keep current"] = "",
+    meta_description: Annotated[str, "Replacement SEO description; leave empty to keep current"] = "",
+) -> dict:
+    """Update an existing blog draft or published post without changing its publication state."""
+    with _tool_session() as db:
+        post = db.scalar(select(BlogPost).where(BlogPost.slug == slug))
+        if post is None:
+            raise ValueError(f"No blog post found with slug '{slug}'")
+        if title:
+            title = title.strip()
+            if not title or len(title) > 180:
+                raise ValueError("title must contain 1 to 180 characters")
+            post.title = title
+        if content_markdown:
+            if not content_markdown.strip() or len(content_markdown) > 100_000:
+                raise ValueError("content_markdown must contain 1 to 100000 characters")
+            post.content_markdown = content_markdown
+        if summary:
+            if len(summary) > 320:
+                raise ValueError("summary must be at most 320 characters")
+            post.summary = summary.strip()
+        if meta_description:
+            if len(meta_description) > 320:
+                raise ValueError("meta_description must be at most 320 characters")
+            post.meta_description = meta_description.strip()
+        post.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(post)
+        return _tool_post(post)
+
+
+@mcp.tool()
+def publish_blog_post(slug: Annotated[str, "Slug returned by create_blog_post or list_blog_posts"]) -> dict:
+    """Publish a draft so it appears on the public blog and sitemap."""
+    with _tool_session() as db:
+        post = db.scalar(select(BlogPost).where(BlogPost.slug == slug))
+        if post is None:
+            raise ValueError(f"No blog post found with slug '{slug}'")
+        if not post.is_published:
+            now = datetime.now(timezone.utc)
+            post.is_published = True
+            post.published_at = now
+            post.updated_at = now
+            db.commit()
+            db.refresh(post)
+        return _tool_post(post)

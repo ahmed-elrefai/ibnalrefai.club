@@ -7,10 +7,9 @@ const translations = {
     ar: {
         'nav-home': 'الرئيسية',
         'nav-manga': 'المشاريع',
-        'nav-stats': 'الترويج',
+        'nav-blog': 'المدونة',
         'nav-about': 'عني',
         'nav-arena': 'تحدي سرعة الكتابة',
-        'nav-visualizer': 'المحاكي البرمجي',
         'btn-coffee': '☕ ادعمنا',
         'bg-brush-1': 'عزيمة',
         'bg-brush-2': 'الوحش',
@@ -84,10 +83,9 @@ const translations = {
     en: {
         'nav-home': 'HOME',
         'nav-manga': 'PROJECTS',
-        'nav-stats': 'PROMO',
+        'nav-blog': 'BLOG',
         'nav-about': 'ABOUT ME',
         'nav-arena': 'TYPING TEST',
-        'nav-visualizer': 'CODE VISUALIZER',
         'btn-coffee': '☕ Buy Me a Coffee',
         'bg-brush-1': 'WILLPOWER',
         'bg-brush-2': 'BEAST',
@@ -1127,10 +1125,6 @@ function checkUserSession() {
     // Session management disabled since auth is replaced by Buy Me A Coffee
 }
 
-// ----------------------------------------------------
-// COMING SOON TOAST NOTIFICATION
-// ----------------------------------------------------
-const navPromo = document.getElementById('nav-promo');
 const toastEl = document.createElement('div');
 toastEl.className = 'manga-toast';
 document.body.appendChild(toastEl);
@@ -1143,20 +1137,6 @@ function showToast(message) {
     setTimeout(() => {
         toastEl.classList.remove('show');
     }, 4000);
-}
-
-function showPromoToast() {
-    const message = currentLang === 'ar'
-        ? 'صفحة الترويج قريباً إن شاء الله! 🚀'
-        : 'Promo page is coming soon! 🚀';
-    showToast(message);
-}
-
-if (navPromo) {
-    navPromo.addEventListener('click', (e) => {
-        e.preventDefault();
-        showPromoToast();
-    });
 }
 
 // ----------------------------------------------------

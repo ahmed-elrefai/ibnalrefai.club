@@ -24,8 +24,9 @@ Set these Vercel environment variables:
   you manually register and trust. Requests from other registered clients are
   rejected by the MCP token verifier.
 - `BASE_URL`: public website origin, `https://www.ibnalrefai.club`.
-- `BLOG_ANALYTICS_SECRET` (optional): random secret of at least 32 characters
-  for signing anonymous blog interaction cookies.
+- `BLOG_ANALYTICS_SECRET`: required random secret of at least 32 characters
+  for signing anonymous blog interaction cookies. Blog views and likes return
+  an error until this is configured.
 
 Set the variables for Production and redeploy. Never use a Supabase service
 role key in the browser or commit database credentials to Git.
@@ -40,14 +41,20 @@ In Supabase **Authentication → OAuth Server**:
 4. Leave **Allow Dynamic OAuth Apps** disabled. Public registration lets
    arbitrary clients create app registrations and can enable convincing
    impersonation or phishing attempts.
-5. In **Authentication → URL Configuration**, allow the exact redirect URL
-   `https://www.ibnalrefai.club/oauth/consent`.
+5. In **Authentication → URL Configuration**, allow
+   `https://www.ibnalrefai.club/oauth/consent`. This is the redirect used by
+   the owner's email sign-in link; it is **not** the MCP client's OAuth
+   `redirect_uri`.
 6. Create/confirm your owner account in **Authentication → Users**, then copy
    its user UUID into Vercel as `BLOG_OWNER_USER_ID`.
 7. Under **Authentication → OAuth Apps**, manually register only the client
-   you intend to use. Use its exact redirect URI from that MCP client. For a
-   PKCE-only MCP client choose a **Public** app; use a **Confidential** app
-   only if the client requires a secret and can protect it.
+   you intend to use. Add the exact OAuth callback/redirect URI that Grok
+   displays or documents for its MCP connector. This value belongs to Grok,
+   not your website; do not enter `/oauth/consent` here unless Grok explicitly
+   identifies that URL as its callback. Redirect URIs must match exactly,
+   including scheme, host, path, and trailing slash. For a PKCE-only MCP
+   client choose a **Public** app; use a **Confidential** app only if the
+   client requires a secret and can protect it.
 8. Add the registered app's client ID to
    `SUPABASE_ALLOWED_OAUTH_CLIENT_IDS` in Vercel. Add more approved IDs as a
    comma-separated list. Do not put a client secret in frontend code.
@@ -63,6 +70,13 @@ client secret. Public PKCE clients do not have a secret. The client must use
 OAuth discovery and the redirect URI registered in Supabase. The MCP server
 rejects valid Supabase tokens issued to client IDs absent from
 `SUPABASE_ALLOWED_OAUTH_CLIENT_IDS`.
+
+If Supabase returns `{"code":400,"error_code":"validation_failed","msg":"invalid redirect_uri"}`,
+the callback URI sent by the MCP client does not exactly match one registered
+for that OAuth app in Supabase. Check Grok's MCP OAuth callback URI and add it
+to that app under **Authentication → OAuth Apps**. Do not change the site's
+**Authorization Path**: `/oauth/consent` is where Supabase sends the browser
+to ask for owner approval, not where it returns the browser to Grok.
 
 The app disables Psycopg prepared statements and limits each serverless
 instance to one pooled connection for Supabase transaction-pooler

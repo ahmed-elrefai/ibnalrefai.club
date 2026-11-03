@@ -18,16 +18,25 @@
             keepalive: true
         })
             .then(async (response) => {
-                if (!response.ok) throw new Error('Could not record this view.');
-                return response.json();
+                const body = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(body);
+                } catch {
+                    if (response.ok) throw new Error('Invalid response from the server.');
+                }
+                if (!response.ok) {
+                    throw new Error(result?.detail || 'Could not record this view.');
+                }
+                return result;
             })
             .then((result) => {
                 viewCount.textContent = result.views.toLocaleString();
             })
-            .catch(() => {
-                viewStatus.textContent = isArabic
+            .catch((error) => {
+                viewStatus.textContent = error.message || (isArabic
                     ? 'تعذر تحديث عدد المشاهدات.'
-                    : 'Could not update the view count.';
+                    : 'Could not update the view count.');
             });
     };
 

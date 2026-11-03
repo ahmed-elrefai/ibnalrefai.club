@@ -14,6 +14,7 @@ import markdown
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastmcp import FastMCP
+from fastmcp.server.auth import AccessToken
 from fastmcp.server.auth.providers.supabase import SupabaseProvider
 from fastmcp.server.dependencies import get_access_token
 from sqlalchemy import (
@@ -59,14 +60,36 @@ BASE_URL = os.getenv("BASE_URL", "https://www.ibnalrefai.club").rstrip("/")
 SUPABASE_PROJECT_URL = os.getenv("SUPABASE_PROJECT_URL", "").rstrip("/")
 SUPABASE_JWT_ALGORITHM = os.getenv("SUPABASE_JWT_ALGORITHM", "ES256")
 BLOG_OWNER_USER_ID = os.getenv("BLOG_OWNER_USER_ID", "")
+SUPABASE_ALLOWED_OAUTH_CLIENT_IDS = {
+    client_id.strip()
+    for client_id in os.getenv("SUPABASE_ALLOWED_OAUTH_CLIENT_IDS", "").split(",")
+    if client_id.strip()
+}
+
+
+class AllowlistedSupabaseProvider(SupabaseProvider):
+    async def verify_token(self, token: str) -> AccessToken | None:
+        access_token = await super().verify_token(token)
+        if access_token is None:
+            return None
+        client_id = access_token.claims.get("client_id") or access_token.claims.get(
+            "azp"
+        )
+        if (
+            not isinstance(client_id, str)
+            or client_id not in SUPABASE_ALLOWED_OAUTH_CLIENT_IDS
+        ):
+            return None
+        return access_token
+
 
 auth_provider = (
-    SupabaseProvider(
+    AllowlistedSupabaseProvider(
         project_url=SUPABASE_PROJECT_URL,
         base_url=BASE_URL,
         algorithm=SUPABASE_JWT_ALGORITHM,
     )
-    if SUPABASE_PROJECT_URL
+    if SUPABASE_PROJECT_URL and SUPABASE_ALLOWED_OAUTH_CLIENT_IDS
     else None
 )
 mcp = FastMCP("Ahmed Elrefai Blog", auth=auth_provider)

@@ -20,6 +20,9 @@ Set these Vercel environment variables:
   Supabase project (`ES256`, `RS256`, or `HS256`); defaults to `ES256`.
 - `BLOG_OWNER_USER_ID`: the UUID of the Supabase Auth user allowed to manage
   blog posts through MCP.
+- `SUPABASE_ALLOWED_OAUTH_CLIENT_IDS`: comma-separated IDs of the OAuth apps
+  you manually register and trust. Requests from other registered clients are
+  rejected by the MCP token verifier.
 - `BASE_URL`: public website origin, `https://www.ibnalrefai.club`.
 - `BLOG_ANALYTICS_SECRET` (optional): random secret of at least 32 characters
   for signing anonymous blog interaction cookies.
@@ -34,22 +37,32 @@ In Supabase **Authentication → OAuth Server**:
 1. Enable the OAuth Server.
 2. Set **Site URL** to `https://www.ibnalrefai.club`.
 3. Set **Authorization Path** to `/oauth/consent`.
-4. Enable **Allow Dynamic OAuth Apps** so MCP clients can register.
+4. Leave **Allow Dynamic OAuth Apps** disabled. Public registration lets
+   arbitrary clients create app registrations and can enable convincing
+   impersonation or phishing attempts.
 5. In **Authentication → URL Configuration**, allow the exact redirect URL
    `https://www.ibnalrefai.club/oauth/consent`.
 6. Create/confirm your owner account in **Authentication → Users**, then copy
    its user UUID into Vercel as `BLOG_OWNER_USER_ID`.
+7. Under **Authentication → OAuth Apps**, manually register only the client
+   you intend to use. Use its exact redirect URI from that MCP client. For a
+   PKCE-only MCP client choose a **Public** app; use a **Confidential** app
+   only if the client requires a secret and can protect it.
+8. Add the registered app's client ID to
+   `SUPABASE_ALLOWED_OAUTH_CLIENT_IDS` in Vercel. Add more approved IDs as a
+   comma-separated list. Do not put a client secret in frontend code.
 
 The deployed consent screen lets the owner sign in using a one-time email link
 and approve or deny the requesting MCP client. All MCP blog tools check the
 verified Supabase token's user ID against `BLOG_OWNER_USER_ID`; other signed-in
 users cannot read drafts or modify posts.
 
-Connect an MCP client to `https://www.ibnalrefai.club/mcp` and choose its
-OAuth option. Supabase supplies OAuth discovery and dynamically registers
-clients. With dynamic registration enabled, let the MCP client register itself;
-do not enter a manually created client ID or client secret. The previous
-shared `BLOG_MCP_TOKEN` authentication is no longer used.
+Connect the MCP client to `https://www.ibnalrefai.club/mcp` using OAuth. Enter
+the manually registered client ID and, only for a confidential client, its
+client secret. Public PKCE clients do not have a secret. The client must use
+OAuth discovery and the redirect URI registered in Supabase. The MCP server
+rejects valid Supabase tokens issued to client IDs absent from
+`SUPABASE_ALLOWED_OAUTH_CLIENT_IDS`.
 
 The app disables Psycopg prepared statements and limits each serverless
 instance to one pooled connection for Supabase transaction-pooler

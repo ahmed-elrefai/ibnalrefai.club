@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from blog import (
     BLOG_OWNER_USER_ID,
+    SUPABASE_ALLOWED_OAUTH_CLIENT_IDS,
     SUPABASE_PROJECT_URL,
     auth_provider,
     initialize_database,
@@ -41,7 +42,12 @@ async def require_oauth_configuration(request: Request, call_next):
         if auth_provider is None:
             return JSONResponse(
                 status_code=503,
-                content={"detail": "SUPABASE_PROJECT_URL is not configured for MCP OAuth"},
+                content={
+                    "detail": (
+                        "Configure SUPABASE_PROJECT_URL and "
+                        "SUPABASE_ALLOWED_OAUTH_CLIENT_IDS for MCP OAuth"
+                    )
+                },
             )
     return await call_next(request)
 
@@ -111,7 +117,12 @@ async def oauth_consent():
 
 @app.get("/oauth/config", include_in_schema=False)
 async def oauth_config():
-    if not SUPABASE_PROJECT_URL or not SUPABASE_ANON_KEY or not BLOG_OWNER_USER_ID:
+    if (
+        not SUPABASE_PROJECT_URL
+        or not SUPABASE_ANON_KEY
+        or not BLOG_OWNER_USER_ID
+        or not SUPABASE_ALLOWED_OAUTH_CLIENT_IDS
+    ):
         return JSONResponse(
             status_code=503,
             content={"detail": "Supabase OAuth consent is not fully configured"},
@@ -121,6 +132,7 @@ async def oauth_config():
             "project_url": SUPABASE_PROJECT_URL,
             "anon_key": SUPABASE_ANON_KEY,
             "owner_user_id": BLOG_OWNER_USER_ID,
+            "allowed_oauth_client_ids": sorted(SUPABASE_ALLOWED_OAUTH_CLIENT_IDS),
         },
         headers={"Cache-Control": "no-store"},
     )

@@ -79,8 +79,17 @@ async function loadAuthorization() {
         redirectToOAuthClient(details.redirect_url);
         return;
     }
+    const clientId = details.client?.id || details.client_id;
+    const isAllowedClient = Boolean(
+        clientId && config.allowed_oauth_client_ids.includes(clientId)
+    );
     signedInUser.textContent = `Signed in as ${userData.user.email || userData.user.id}`;
     clientDetails.textContent = JSON.stringify(details, null, 2);
+    if (!isAllowedClient) {
+        warning.textContent = 'This OAuth client is not on the server allowlist. Approval is disabled.';
+        warning.hidden = false;
+        approveButton.disabled = true;
+    }
     approvalPanel.hidden = false;
     loginPanel.hidden = true;
     status.hidden = true;
